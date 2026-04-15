@@ -5,7 +5,7 @@ export default registerAs('database', () => ({
   port: process.env.DB_PORT || 5432,
   username: process.env.DB_USERNAME || 'postgres',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_DATABASE || 'postgres',
+  database: process.env.DB_NAME || 'postgres',
   synchronize: process.env.DB_SYNC === 'true',
   autoLoadEntities: process.env.DB_AUTOLOAD === 'true',
 }));
