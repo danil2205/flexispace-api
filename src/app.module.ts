@@ -4,13 +4,12 @@ import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
-import { AuthService } from './auth/auth.service';
+import { JwtModule } from '@nestjs/jwt';
+import { AuthModule } from './auth/auth.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import jwtConfig from './auth/config/jwt.config';
 import environmentValidation from './config/environment.validation';
-import { JwtModule } from '@nestjs/jwt';
-import { AuthController } from './auth/auth.controller';
 
 const ENV = process.env.NODE_ENV;
 @Module({
@@ -38,8 +37,9 @@ const ENV = process.env.NODE_ENV;
       }),
     }),
     UsersModule,
+    AuthModule,
   ],
-  controllers: [AppController, AuthController],
-  providers: [AppService, AuthService],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}

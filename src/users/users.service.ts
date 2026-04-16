@@ -45,7 +45,7 @@ export class UsersService {
     return user;
   }
 
-  async findOneById(id: number): Promise<User | null> {
+  async findOneById(id: number): Promise<User> {
     let user: User | null;
 
     try {
@@ -95,5 +95,15 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async updateRefreshToken(userId: number, refreshToken: string | null) {
+    if (refreshToken) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedToken = await bcrypt.hash(refreshToken, salt);
+      await this.usersRepository.update(userId, { refreshToken: hashedToken });
+    } else {
+      await this.usersRepository.update(userId, { refreshToken: null });
+    }
   }
 }
