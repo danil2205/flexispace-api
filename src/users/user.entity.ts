@@ -39,6 +39,7 @@ export class User {
     type: 'varchar',
     length: 96,
     nullable: false,
+    select: false,
   })
   @Exclude()
   password: string;
@@ -49,6 +50,7 @@ export class User {
   @Column({
     type: 'varchar',
     nullable: true,
+    select: false,
   })
   @Exclude()
   refreshToken: string | null;

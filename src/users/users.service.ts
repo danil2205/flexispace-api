@@ -31,7 +31,10 @@ export class UsersService {
     let user: User | null;
 
     try {
-      user = await this.usersRepository.findOneBy({ email });
+      user = await this.usersRepository.findOne({
+        where: { email },
+        select: ['id', 'email', 'password', 'role', 'refreshToken'],
+      });
     } catch {
       throw new RequestTimeoutException(TIMEOUT_EXCEPTION, {
         description: TIMEOUT_EXCEPTION_DESCRIPTION,
@@ -49,7 +52,10 @@ export class UsersService {
     let user: User | null;
 
     try {
-      user = await this.usersRepository.findOneBy({ id });
+      user = await this.usersRepository.findOne({
+        where: { id },
+        select: ['id', 'email', 'password', 'role', 'refreshToken'],
+      });
     } catch {
       throw new RequestTimeoutException(TIMEOUT_EXCEPTION, {
         description: TIMEOUT_EXCEPTION_DESCRIPTION,

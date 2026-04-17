@@ -78,10 +78,18 @@ export class AuthService {
   }
 
   public async refreshTokens(refreshToken: string) {
-    const { sub } =
-      this.jwtService.decode<Pick<ActiveUserData, 'sub'>>(refreshToken);
+    let payload: Pick<ActiveUserData, 'sub'>;
+    try {
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.jwtConfiguration.refreshSecret,
+        audience: this.jwtConfiguration.audience,
+        issuer: this.jwtConfiguration.issuer,
+      });
+    } catch {
+      throw new ForbiddenException(TOKEN_EXPIRED);
+    }
 
-    const user = await this.usersService.findOneById(sub);
+    const user = await this.usersService.findOneById(payload.sub);
     if (!user.refreshToken) {
       throw new ForbiddenException(ACCESS_DENIED);
     }
@@ -92,16 +100,6 @@ export class AuthService {
     );
     if (!isRefreshTokenValid) {
       throw new UnauthorizedException(INVALID_TOKEN);
-    }
-
-    try {
-      await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.jwtConfiguration.refreshSecret,
-        audience: this.jwtConfiguration.audience,
-        issuer: this.jwtConfiguration.issuer,
-      });
-    } catch {
-      throw new ForbiddenException(TOKEN_EXPIRED);
     }
 
     return await this.generateTokens(user);

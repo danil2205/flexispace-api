@@ -11,15 +11,25 @@ import { SignInUserDto } from './dtos/signin-user-dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshTokenDto } from './dtos/refresh-token.dto';
 import { ActiveUser } from './decorators/active-user.decorator';
+import { CreateUserDto } from '../users/dtos/create-user.dto';
+import { UsersService } from '../users/users.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Post('sign-in')
   @HttpCode(HttpStatus.OK)
   public signIn(@Body() signInUserDto: SignInUserDto) {
     return this.authService.signIn(signInUserDto);
+  }
+
+  @Post('sign-up')
+  public createUser(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.create(createUserDto);
   }
 
   @UseGuards(JwtAuthGuard)
