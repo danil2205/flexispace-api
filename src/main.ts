@@ -8,10 +8,23 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('FlexiSpace API')
     .addServer('http://localhost:3000')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        in: 'header',
+        description: 'Enter JWT token',
+      },
+      'bearer',
+    )
     .setVersion('1.0')
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('api', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

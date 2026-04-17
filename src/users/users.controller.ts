@@ -5,6 +5,13 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from './enums/user-role.enum';
 import { ActiveUser } from '../auth/decorators/active-user.decorator';
+import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 
 @Controller('users')
 export class UsersController {
@@ -12,6 +19,10 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Get current user profile' })
+  @ApiOkResponse({ description: 'Current user profile' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   public async getProfile(@ActiveUser('sub') userId: number) {
     return this.usersService.findOneById(userId);
   }
@@ -19,6 +30,11 @@ export class UsersController {
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Get all users (admin only)' })
+  @ApiOkResponse({ description: 'List of users' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'Forbidden: admin role required' })
   public getUsers() {
     return this.usersService.findAll();
   }
