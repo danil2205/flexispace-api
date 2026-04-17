@@ -1,4 +1,4 @@
-import { UserRole } from '../../users/user.entity';
+import { UserRole } from '../../users/enums/user-role.enum';
 
 export interface ActiveUserData {
   sub: number;
