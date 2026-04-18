@@ -6,9 +6,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from './auth/auth.module';
+import { FilesModule } from './files/files.module';
+import { WorkspacesModule } from './workspaces/workspaces.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import jwtConfig from './auth/config/jwt.config';
+import awsConfig from './config/aws.config';
 import environmentValidation from './config/environment.validation';
 
 const ENV = process.env.NODE_ENV;
@@ -17,7 +20,7 @@ const ENV = process.env.NODE_ENV;
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: !ENV ? '.env' : `.env.${ENV}`,
-      load: [appConfig, databaseConfig],
+      load: [appConfig, databaseConfig, awsConfig],
       validationSchema: environmentValidation,
     }),
     ConfigModule.forFeature(jwtConfig),
@@ -38,6 +41,8 @@ const ENV = process.env.NODE_ENV;
     }),
     UsersModule,
     AuthModule,
+    FilesModule,
+    WorkspacesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
