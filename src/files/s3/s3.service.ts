@@ -14,6 +14,7 @@ export class S3Service {
   private s3Client: S3Client;
   private readonly bucketName: string;
   private readonly region: string;
+  private readonly endpoint: string;
 
   constructor(
     @Inject(awsConfig.KEY)
@@ -21,8 +22,11 @@ export class S3Service {
   ) {
     this.region = this.awsConfiguration.region;
     this.bucketName = this.awsConfiguration.s3BucketName;
+    this.endpoint = this.awsConfiguration.endpoint;
     this.s3Client = new S3Client({
       region: this.region,
+      endpoint: this.endpoint,
+      forcePathStyle: true,
       credentials: {
         accessKeyId: this.awsConfiguration.accessKeyId,
         secretAccessKey: this.awsConfiguration.secretAccessKey,
@@ -45,7 +49,7 @@ export class S3Service {
 
     try {
       await this.s3Client.send(command);
-      return `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${uniqueFileName}`;
+      return `${this.endpoint}/${this.bucketName}/${uniqueFileName}`;
     } catch (error) {
       console.error('S3 Upload Error:', error);
       throw new InternalServerErrorException(UPLOAD_ERROR);
