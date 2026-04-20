@@ -15,17 +15,44 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/enums/user-role.enum';
 import { CreateWorkspaceDto } from './dtos/create-workspace.dto';
 import { GetWorkspacesFilterDto } from './dtos/get-workspaces-filter.dto';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import { WorkspaceType } from './enums/workspace-type.enum';
 
 @Controller('workspaces')
 export class WorkspacesController {
   constructor(private readonly workspacesService: WorkspacesService) {}
 
   @Get()
+  @ApiOperation({ summary: 'Get all workspaces with optional filters' })
+  @ApiQuery({ name: 'minPrice', required: false, type: Number })
+  @ApiQuery({ name: 'minCapacity', required: false, type: Number })
+  @ApiQuery({ name: 'type', required: false, enum: WorkspaceType })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiOkResponse({ description: 'List of workspaces' })
+  @ApiBadRequestResponse({
+    description:
+      'Invalid query parameters (e.g. non-numeric minPrice or minCapacity)',
+  })
   async findAll(@Query() getWorkspacesFilterDto: GetWorkspacesFilterDto) {
     return this.workspacesService.findAll(getWorkspacesFilterDto);
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get workspace by ID' })
+  @ApiParam({ name: 'id', type: Number, required: true, example: 1 })
+  @ApiOkResponse({ description: 'Workspace found' })
+  @ApiBadRequestResponse({ description: 'Invalid workspace id' })
   async findOneById(@Param('id', ParseIntPipe) id: number) {
     return this.workspacesService.findOneById(id);
   }
@@ -33,6 +60,13 @@ export class WorkspacesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @Post()
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Create workspace' })
+  @ApiCreatedResponse({ description: 'Workspace created successfully' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden: admin or manager role required',
+  })
   async create(@Body() createWorkspaceDto: CreateWorkspaceDto) {
     return this.workspacesService.create(createWorkspaceDto);
   }
