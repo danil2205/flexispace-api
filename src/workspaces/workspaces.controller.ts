@@ -5,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { WorkspacesService } from './workspaces.service';
@@ -13,14 +14,15 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../users/enums/user-role.enum';
 import { CreateWorkspaceDto } from './dtos/create-workspace.dto';
+import { GetWorkspacesFilterDto } from './dtos/get-workspaces-filter.dto';
 
 @Controller('workspaces')
 export class WorkspacesController {
   constructor(private readonly workspacesService: WorkspacesService) {}
 
   @Get()
-  async findAll() {
-    return this.workspacesService.findAll();
+  async findAll(@Query() getWorkspacesFilterDto: GetWorkspacesFilterDto) {
+    return this.workspacesService.findAll(getWorkspacesFilterDto);
   }
 
   @Get(':id')

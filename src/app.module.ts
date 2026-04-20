@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from './auth/auth.module';
 import { FilesModule } from './files/files.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
+import { PaginationModule } from './common/pagination/pagination.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import jwtConfig from './auth/config/jwt.config';
@@ -43,6 +44,7 @@ const ENV = process.env.NODE_ENV;
     AuthModule,
     FilesModule,
     WorkspacesModule,
+    PaginationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
