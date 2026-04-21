@@ -14,6 +14,9 @@ import databaseConfig from './config/database.config';
 import jwtConfig from './auth/config/jwt.config';
 import awsConfig from './config/aws.config';
 import environmentValidation from './config/environment.validation';
+import { CacheModule } from '@nestjs/cache-manager';
+import { createKeyv } from '@keyv/redis';
+import redisConfig from './config/redis.config';
 
 const ENV = process.env.NODE_ENV;
 @Module({
@@ -21,7 +24,7 @@ const ENV = process.env.NODE_ENV;
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: !ENV ? '.env' : `.env.${ENV}`,
-      load: [appConfig, databaseConfig, awsConfig],
+      load: [appConfig, databaseConfig, awsConfig, redisConfig],
       validationSchema: environmentValidation,
     }),
     ConfigModule.forFeature(jwtConfig),
@@ -38,6 +41,19 @@ const ENV = process.env.NODE_ENV;
         password: configService.get('database.password'),
         host: configService.get('database.host'),
         database: configService.get('database.database'),
+      }),
+    }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        stores: [
+          createKeyv(
+            `redis://${configService.get('redis.host')}:${configService.get('redis.port')}`,
+          ),
+        ],
+        ttl: configService.get('redis.ttl'),
       }),
     }),
     UsersModule,

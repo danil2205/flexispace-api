@@ -22,6 +22,11 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+  redis:
+    image: redis:alpine
+    container_name: flexispace-redis
+    ports:
+      - '6379:6379'
 
 volumes:
   postgres_data:
