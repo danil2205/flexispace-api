@@ -11,18 +11,24 @@ export default Joi.object({
   DB_PASSWORD: Joi.string().required(),
   DB_SYNC: Joi.string().required(),
   DB_AUTOLOAD: Joi.string().required(),
+
   JWT_SECRET: Joi.string().required(),
   JWT_REFRESH_SECRET: Joi.string().required(),
   JWT_AUDIENCE: Joi.string().required(),
   JWT_ISSUER: Joi.string().required(),
   JWT_ACCESS_TOKEN_TTL: Joi.number().required(),
   JWT_REFRESH_TOKEN_TTL: Joi.number().required(),
+
   AWS_REGION: Joi.string().required(),
   AWS_S3_BUCKET_NAME: Joi.string().required(),
   AWS_ENDPOINT: Joi.string().required(),
   AWS_ACCESS_KEY_ID: Joi.string().required(),
   AWS_SECRET_ACCESS_KEY: Joi.string().required(),
+
   REDIS_HOST: Joi.string().required(),
   REDIS_PORT: Joi.number().port().required(),
   REDIS_TTL: Joi.number().required(),
+
+  STRIPE_SECRET_KEY: Joi.string().required(),
+  STRIPE_WEBHOOK_SECRET: Joi.string().required(),
 });

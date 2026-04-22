@@ -20,16 +20,16 @@ export class S3Service {
     @Inject(awsConfig.KEY)
     private readonly awsConfiguration: ConfigType<typeof awsConfig>,
   ) {
-    this.region = this.awsConfiguration.region;
-    this.bucketName = this.awsConfiguration.s3BucketName;
-    this.endpoint = this.awsConfiguration.endpoint;
+    this.region = this.awsConfiguration.region!;
+    this.bucketName = this.awsConfiguration.s3BucketName!;
+    this.endpoint = this.awsConfiguration.endpoint!;
     this.s3Client = new S3Client({
       region: this.region,
       endpoint: this.endpoint,
       forcePathStyle: true,
       credentials: {
-        accessKeyId: this.awsConfiguration.accessKeyId,
-        secretAccessKey: this.awsConfiguration.secretAccessKey,
+        accessKeyId: this.awsConfiguration.accessKeyId!,
+        secretAccessKey: this.awsConfiguration.secretAccessKey!,
       },
     });
   }

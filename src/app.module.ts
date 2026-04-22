@@ -13,10 +13,14 @@ import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import jwtConfig from './auth/config/jwt.config';
 import awsConfig from './config/aws.config';
+import redisConfig from './config/redis.config';
+import paymentConfig from './config/payment.config';
 import environmentValidation from './config/environment.validation';
 import { CacheModule } from '@nestjs/cache-manager';
 import { createKeyv } from '@keyv/redis';
-import redisConfig from './config/redis.config';
+import { BookingsModule } from './bookings/bookings.module';
+import { StripeModule } from './stripe/stripe.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 const ENV = process.env.NODE_ENV;
 @Module({
@@ -24,7 +28,7 @@ const ENV = process.env.NODE_ENV;
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: !ENV ? '.env' : `.env.${ENV}`,
-      load: [appConfig, databaseConfig, awsConfig, redisConfig],
+      load: [appConfig, databaseConfig, awsConfig, redisConfig, paymentConfig],
       validationSchema: environmentValidation,
     }),
     ConfigModule.forFeature(jwtConfig),
@@ -56,11 +60,14 @@ const ENV = process.env.NODE_ENV;
         ttl: configService.get('redis.ttl'),
       }),
     }),
+    EventEmitterModule.forRoot(),
     UsersModule,
     AuthModule,
     FilesModule,
     WorkspacesModule,
     PaginationModule,
+    BookingsModule,
+    StripeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
