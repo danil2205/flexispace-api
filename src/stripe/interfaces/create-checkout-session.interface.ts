@@ -3,10 +3,7 @@ export interface CreateCheckoutSessionParams {
   currency?: string;
   productName: string;
   description?: string;
-  metadata: {
-    bookingId: string;
-    [key: string]: string;
-  };
+  metadata: { bookingId: string } & Record<string, string>;
   successUrl: string;
   cancelUrl: string;
 }

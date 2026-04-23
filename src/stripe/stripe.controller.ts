@@ -21,8 +21,7 @@ export class StripeController {
     const event = this.stripeService.constructEvent(rawBody, signature);
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
-      this.eventEmitter.emit('payment.success', session);
-      console.log(`[Stripe] payment.success:`, session.metadata);
+      this.eventEmitter.emit('payment.success', session.metadata);
     }
     return { received: true };
   }
