@@ -55,4 +55,14 @@ export class StripeService {
       throw new BadRequestException(`Webhook error: ${message}`);
     }
   }
+
+  public async expireSession(sessionId: string) {
+    try {
+      await this.stripe.checkout.sessions.expire(sessionId);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      throw new BadRequestException(`Session expiration error: ${message}`);
+    }
+  }
 }

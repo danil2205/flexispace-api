@@ -29,6 +29,9 @@ export class Booking {
   @Column({ type: 'timestamp' })
   endTime: Date;
 
+  @Column({ nullable: true })
+  paymentSessionId: string;
+
   @Column({ type: 'enum', enum: BookingStatus, default: BookingStatus.PENDING })
   status: BookingStatus;
 
