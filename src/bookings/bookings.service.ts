@@ -2,9 +2,10 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { Booking } from './booking.entity';
-import { DataSource } from 'typeorm';
+import { DataSource, Raw } from 'typeorm';
 import { CreateBookingDto } from './dtos/create-booking.dto';
 import {
   BOOKING_ALREADY_CONFIRMED_ERROR,
@@ -22,9 +23,12 @@ import { BookingStatus } from './enums/booking-status.enum';
 import { StripeService } from 'src/stripe/stripe.service';
 import { OnEvent } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly stripeService: StripeService,
@@ -164,5 +168,37 @@ export class BookingsService {
       message: BOOKING_CANCELLED_SUCCESS_MESSAGE,
       data: null,
     };
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  public async cancelExpiredBookings() {
+    this.logger.debug('Checking for expired bookings');
+
+    const expiredBookings = await this.dataSource.manager.find(Booking, {
+      where: {
+        status: BookingStatus.PENDING,
+        createdAt: Raw((alias) => `${alias} < NOW() - INTERVAL '10 minutes'`),
+      },
+    });
+
+    this.logger.warn(
+      `Found ${expiredBookings.length} expired bookings. Starting to cancel...`,
+    );
+
+    for (const booking of expiredBookings) {
+      try {
+        if (booking.paymentSessionId) {
+          await this.stripeService.expireSession(booking.paymentSessionId);
+        }
+        booking.status = BookingStatus.CANCELLED;
+        await this.dataSource.manager.save(booking);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : JSON.stringify(error);
+        this.logger.error(
+          `Booking ${booking.id} could not be cancelled: ${message}`,
+        );
+      }
+    }
   }
 }

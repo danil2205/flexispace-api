@@ -21,6 +21,7 @@ import { createKeyv } from '@keyv/redis';
 import { BookingsModule } from './bookings/bookings.module';
 import { StripeModule } from './stripe/stripe.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 
 const ENV = process.env.NODE_ENV;
 @Module({
@@ -61,6 +62,7 @@ const ENV = process.env.NODE_ENV;
       }),
     }),
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     UsersModule,
     AuthModule,
     FilesModule,
