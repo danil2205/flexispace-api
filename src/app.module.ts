@@ -22,6 +22,7 @@ import { BookingsModule } from './bookings/bookings.module';
 import { StripeModule } from './stripe/stripe.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
+import { NotificationsModule } from './notifications/notifications.module';
 
 const ENV = process.env.NODE_ENV;
 @Module({
@@ -70,6 +71,7 @@ const ENV = process.env.NODE_ENV;
     PaginationModule,
     BookingsModule,
     StripeModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
