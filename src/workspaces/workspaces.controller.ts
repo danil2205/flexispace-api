@@ -27,6 +27,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { WorkspaceType } from './enums/workspace-type.enum';
+import { GetAvailableWorkspacesDto } from './dtos/get-available-workspaces.dto';
 
 @Controller('workspaces')
 export class WorkspacesController {
@@ -44,8 +45,25 @@ export class WorkspacesController {
     description:
       'Invalid query parameters (e.g. non-numeric minPrice or minCapacity)',
   })
-  async findAll(@Query() getWorkspacesFilterDto: GetWorkspacesFilterDto) {
-    return this.workspacesService.findAll(getWorkspacesFilterDto);
+  public async findAll(@Query() query: GetWorkspacesFilterDto) {
+    return this.workspacesService.findAll(query);
+  }
+
+  @Get('available')
+  @ApiOperation({ summary: 'Get all available workspaces by date range' })
+  @ApiQuery({ name: 'startTime', required: true, type: Date })
+  @ApiQuery({ name: 'endTime', required: true, type: Date })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiOkResponse({ description: 'List of available workspaces' })
+  @ApiBadRequestResponse({
+    description:
+      'Invalid date range (endTime must be greater than startTime or startTime must be in the future',
+  })
+  public async findAvailableWorkspaces(
+    @Query() query: GetAvailableWorkspacesDto,
+  ) {
+    return this.workspacesService.findAvailableWorkspaces(query);
   }
 
   @Get(':id')
@@ -53,7 +71,7 @@ export class WorkspacesController {
   @ApiParam({ name: 'id', type: Number, required: true, example: 1 })
   @ApiOkResponse({ description: 'Workspace found' })
   @ApiBadRequestResponse({ description: 'Invalid workspace id' })
-  async findOneById(@Param('id', ParseIntPipe) id: number) {
+  public async findOneById(@Param('id', ParseIntPipe) id: number) {
     return this.workspacesService.findOneById(id);
   }
 
@@ -67,7 +85,7 @@ export class WorkspacesController {
   @ApiForbiddenResponse({
     description: 'Forbidden: admin or manager role required',
   })
-  async create(@Body() createWorkspaceDto: CreateWorkspaceDto) {
+  public async create(@Body() createWorkspaceDto: CreateWorkspaceDto) {
     return this.workspacesService.create(createWorkspaceDto);
   }
 }

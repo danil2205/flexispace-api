@@ -1,4 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Workspace } from './workspace.entity';
 import { Repository } from 'typeorm';
@@ -8,6 +13,13 @@ import { PaginationProvider } from '../common/pagination/providers/pagination.pr
 import { Paginated } from '../common/pagination/interfaces/paginated.interface';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import {
+  INVALID_DATE_RANGE_ERROR,
+  PAST_TIME_ERROR,
+} from './workspaces.constants';
+import { Booking } from 'src/bookings/booking.entity';
+import { BookingStatus } from 'src/bookings/enums/booking-status.enum';
+import { GetAvailableWorkspacesDto } from './dtos/get-available-workspaces.dto';
 
 @Injectable()
 export class WorkspacesService {
@@ -54,6 +66,40 @@ export class WorkspacesService {
     );
     await this.cacheManager.set(cacheKey, result);
     return result;
+  }
+
+  async findAvailableWorkspaces(
+    getAvailableWorkspacesDto: GetAvailableWorkspacesDto,
+  ) {
+    const { page, limit, startTime, endTime } = getAvailableWorkspacesDto;
+
+    if (startTime >= endTime) {
+      throw new BadRequestException(INVALID_DATE_RANGE_ERROR);
+    }
+
+    if (startTime < new Date()) {
+      throw new BadRequestException(PAST_TIME_ERROR);
+    }
+
+    const query = this.workspacesRepository
+      .createQueryBuilder('workspace')
+      .leftJoin(
+        Booking,
+        'booking',
+        `booking.workspaceId = workspace.id
+         AND booking.status IN (:...statuses)
+         AND booking.startTime < :endTime
+         AND booking.endTime > :startTime
+         `,
+        {
+          statuses: [BookingStatus.CONFIRMED, BookingStatus.PENDING],
+          startTime,
+          endTime,
+        },
+      )
+      .where('booking.id IS NULL');
+
+    return this.paginationProvider.paginateQuery(page, limit, query);
   }
 
   async findOneById(id: number): Promise<Workspace> {
