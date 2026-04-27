@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  Patch,
+  Param,
+} from '@nestjs/common';
 import { PromoCodesService } from './promo-codes.service';
 import { CreatePromoCodeDto } from './dtos/create-promo-code.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -12,9 +20,11 @@ import {
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiConflictResponse,
+  ApiBadRequestResponse,
 } from '@nestjs/swagger';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/enums/user-role.enum';
+import { PatchPromoCodeDto } from './dtos/patch-promo-code.dto';
 
 @ApiTags('Promo Codes')
 @ApiBearerAuth('bearer')
@@ -39,5 +49,13 @@ export class PromoCodesController {
   @ApiOkResponse({ description: 'List of all promo codes' })
   async findAll() {
     return this.promoCodesService.findAll();
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update promo code (admin only)' })
+  @ApiOkResponse({ description: 'Promo code updated successfully' })
+  @ApiBadRequestResponse({ description: 'Promo code not found' })
+  async update(@Param('id') id: string, @Body() dto: PatchPromoCodeDto) {
+    return this.promoCodesService.update(id, dto);
   }
 }
