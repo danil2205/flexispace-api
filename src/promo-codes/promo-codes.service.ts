@@ -1,7 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PromoCode } from './promo-code.entity';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { CreatePromoCodeDto } from './dtos/create-promo-code.dto';
 
 @Injectable()
@@ -30,5 +30,15 @@ export class PromoCodesService {
 
   async findAll() {
     return this.promoCodeRepository.find({ order: { createdAt: 'DESC' } });
+  }
+
+  async changeUses(
+    manager: EntityManager,
+    promoCodeId: string,
+    change: number,
+  ) {
+    await manager.update(PromoCode, promoCodeId, {
+      remainingUses: () => `remainingUses + ${change}`,
+    });
   }
 }

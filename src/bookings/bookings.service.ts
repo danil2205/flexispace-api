@@ -7,11 +7,7 @@ import {
 import { Booking } from './booking.entity';
 import { DataSource, EntityManager, Raw } from 'typeorm';
 import { CreateBookingDto } from './dtos/create-booking.dto';
-import {
-  BOOKING_MESSAGES,
-  PROMO_CODE_ERRORS,
-  BOOKING_ERRORS,
-} from './booking.constants';
+import { BOOKING_ERRORS, BOOKING_MESSAGES } from './booking.constants';
 import { Workspace } from 'src/workspaces/workspace.entity';
 import { BookingStatus } from './enums/booking-status.enum';
 import { StripeService } from 'src/stripe/stripe.service';
@@ -19,6 +15,8 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PromoCode } from '../promo-codes/promo-code.entity';
+import { PromoCodesService } from '../promo-codes/promo-codes.service';
+import { PromoCodeValidatorService } from '../promo-codes/promo-code-validator.service';
 
 @Injectable()
 export class BookingsService {
@@ -27,6 +25,8 @@ export class BookingsService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly stripeService: StripeService,
+    private readonly promoCodesService: PromoCodesService,
+    private readonly promoCodeValidatorService: PromoCodeValidatorService,
   ) {}
 
   async createBooking(id: number, createBookingDto: CreateBookingDto) {
@@ -55,21 +55,12 @@ export class BookingsService {
         throw new BadRequestException(BOOKING_ERRORS.WORKSPACE_NOT_FOUND);
       }
 
-      const isBookingOverlap = await queryRunner.manager
-        .createQueryBuilder(Booking, 'booking')
-        .where('booking.workspaceId = :workspaceId', {
-          workspaceId: createBookingDto.workspaceId,
-        })
-        .andWhere('booking.status IN (:...statuses)', {
-          statuses: [BookingStatus.CONFIRMED, BookingStatus.PENDING],
-        })
-        .andWhere('booking.endTime > :start', {
-          start: createBookingDto.startTime,
-        })
-        .andWhere('booking.startTime < :end', {
-          end: createBookingDto.endTime,
-        })
-        .getOne();
+      const isBookingOverlap = await this.isBookingOverlap(
+        queryRunner.manager,
+        createBookingDto.workspaceId,
+        start,
+        end,
+      );
 
       if (isBookingOverlap) {
         throw new ConflictException(BOOKING_ERRORS.WORKSPACE_OCCUPIED);
@@ -78,47 +69,32 @@ export class BookingsService {
       const durationHours =
         (end.getTime() - start.getTime()) / (1000 * 60 * 60);
       let totalPrice = Math.round(durationHours * workspace.pricePerHour);
+
       let appliedPromoCode: PromoCode | null = null;
-
       if (createBookingDto.promoCode) {
-        appliedPromoCode = await queryRunner.manager.findOne(PromoCode, {
-          where: { code: createBookingDto.promoCode },
-          lock: { mode: 'pessimistic_write' },
-        });
-
-        if (!appliedPromoCode) {
-          throw new BadRequestException(PROMO_CODE_ERRORS.INVALID);
-        }
-
-        if (!appliedPromoCode.isActive) {
-          throw new BadRequestException(PROMO_CODE_ERRORS.INACTIVE);
-        }
-
-        if (
-          appliedPromoCode.expiresAt &&
-          appliedPromoCode.expiresAt < new Date()
-        ) {
-          throw new BadRequestException(PROMO_CODE_ERRORS.EXPIRED);
-        }
-
-        if (appliedPromoCode.remainingUses === 0) {
-          throw new BadRequestException(PROMO_CODE_ERRORS.LIMIT_REACHED);
-        }
+        appliedPromoCode =
+          await this.promoCodeValidatorService.validatePromoCode(
+            createBookingDto.promoCode,
+            id,
+            workspace,
+            totalPrice,
+            start,
+            queryRunner.manager,
+          );
 
         const discountAmount = Math.round(
           totalPrice * (appliedPromoCode.discountPercentage / 100),
         );
         totalPrice -= discountAmount;
 
-        await this.changeUsesToPromoCode(
+        await this.promoCodesService.changeUses(
           queryRunner.manager,
-          appliedPromoCode,
+          appliedPromoCode.id,
           -1,
         );
       }
 
       const bookingId = randomUUID();
-
       const session = await this.stripeService.createCheckoutSession({
         amount: totalPrice,
         currency: 'PLN',
@@ -143,7 +119,6 @@ export class BookingsService {
       });
 
       await queryRunner.manager.save(booking);
-
       await queryRunner.commitTransaction();
       return {
         message: BOOKING_MESSAGES.CREATED_SUCCESS,
@@ -152,12 +127,9 @@ export class BookingsService {
           paymentUrl: session.url,
         },
       };
-    } catch {
+    } catch (error) {
       await queryRunner.rollbackTransaction();
-      return {
-        message: BOOKING_MESSAGES.CREATION_FAILED,
-        data: null,
-      };
+      throw error;
     } finally {
       await queryRunner.release();
     }
@@ -197,9 +169,9 @@ export class BookingsService {
     }
 
     if (booking.promoCode) {
-      await this.changeUsesToPromoCode(
+      await this.promoCodesService.changeUses(
         this.dataSource.manager,
-        booking.promoCode,
+        booking.promoCode.id,
         1,
       );
     }
@@ -236,9 +208,9 @@ export class BookingsService {
         }
 
         if (booking.promoCode) {
-          await this.changeUsesToPromoCode(
+          await this.promoCodesService.changeUses(
             this.dataSource.manager,
-            booking.promoCode,
+            booking.promoCode.id,
             1,
           );
         }
@@ -255,17 +227,22 @@ export class BookingsService {
     }
   }
 
-  private async changeUsesToPromoCode(
+  private async isBookingOverlap(
     manager: EntityManager,
-    promoCode: PromoCode,
-    change: number,
+    workspaceId: number,
+    start: Date,
+    end: Date,
   ) {
-    await manager.update(PromoCode, promoCode.id, {
-      remainingUses: () => `remainingUses + ${change}`,
-    });
-
-    this.logger.log(
-      `Changed remaining uses for promo code ${promoCode.code} by ${change}`,
-    );
+    return manager
+      .createQueryBuilder(Booking, 'booking')
+      .where('booking.workspaceId = :workspaceId', {
+        workspaceId,
+      })
+      .andWhere('booking.status IN (:...statuses)', {
+        statuses: [BookingStatus.CONFIRMED, BookingStatus.PENDING],
+      })
+      .andWhere('booking.endTime > :start', { start })
+      .andWhere('booking.startTime < :end', { end })
+      .getOne();
   }
 }

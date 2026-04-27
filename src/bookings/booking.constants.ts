@@ -12,10 +12,3 @@ export const BOOKING_MESSAGES = {
   CREATION_FAILED: 'Booking creation failed',
   CANCELLED_SUCCESS: 'Booking cancelled successfully',
 } as const;
-
-export const PROMO_CODE_ERRORS = {
-  INVALID: 'Invalid promo code',
-  INACTIVE: 'Inactive promo code',
-  EXPIRED: 'Expired promo code',
-  LIMIT_REACHED: 'Promo code limit reached',
-} as const;

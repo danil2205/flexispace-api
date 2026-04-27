@@ -5,10 +5,15 @@ import { Booking } from './booking.entity';
 import { BookingsController } from './bookings.controller';
 import { StripeModule } from 'src/stripe/stripe.module';
 import { PromoCode } from '../promo-codes/promo-code.entity';
+import { PromoCodesModule } from 'src/promo-codes/promo-codes.module';
 
 @Module({
   providers: [BookingsService],
-  imports: [TypeOrmModule.forFeature([Booking, PromoCode]), StripeModule],
+  imports: [
+    TypeOrmModule.forFeature([Booking, PromoCode]),
+    StripeModule,
+    PromoCodesModule,
+  ],
   controllers: [BookingsController],
 })
 export class BookingsModule {}
