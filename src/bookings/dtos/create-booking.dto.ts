@@ -1,5 +1,11 @@
 import { Type } from 'class-transformer';
-import { IsDate, IsNotEmpty, IsNumber } from 'class-validator';
+import {
+  IsDate,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateBookingDto {
@@ -19,4 +25,9 @@ export class CreateBookingDto {
   @Type(() => Date)
   @IsDate()
   endTime: Date;
+
+  @ApiProperty({ example: 'SPRING26', required: false })
+  @IsOptional()
+  @IsString()
+  promoCode?: string;
 }

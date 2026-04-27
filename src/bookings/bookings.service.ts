@@ -5,18 +5,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Booking } from './booking.entity';
-import { DataSource, Raw } from 'typeorm';
+import { DataSource, EntityManager, Raw } from 'typeorm';
 import { CreateBookingDto } from './dtos/create-booking.dto';
 import {
-  BOOKING_ALREADY_CONFIRMED_ERROR,
-  BOOKING_CANCELLED_SUCCESS_MESSAGE,
-  BOOKING_CREATED_SUCCESS_MESSAGE,
-  BOOKING_CREATION_FAILED_MESSAGE,
-  BOOKING_NOT_FOUND_ERROR,
-  INVALID_DATE_RANGE_ERROR,
-  PAST_BOOKING_ERROR,
-  WORKSPACE_NOT_FOUND_ERROR,
-  WORKSPACE_OCCUPIED_ERROR,
+  BOOKING_MESSAGES,
+  PROMO_CODE_ERRORS,
+  BOOKING_ERRORS,
 } from './booking.constants';
 import { Workspace } from 'src/workspaces/workspace.entity';
 import { BookingStatus } from './enums/booking-status.enum';
@@ -24,6 +18,7 @@ import { StripeService } from 'src/stripe/stripe.service';
 import { OnEvent } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { PromoCode } from '../promo-codes/promo-code.entity';
 
 @Injectable()
 export class BookingsService {
@@ -39,11 +34,11 @@ export class BookingsService {
     const end = new Date(createBookingDto.endTime);
 
     if (start >= end) {
-      throw new BadRequestException(INVALID_DATE_RANGE_ERROR);
+      throw new BadRequestException(BOOKING_ERRORS.INVALID_DATE_RANGE);
     }
 
     if (start < new Date()) {
-      throw new BadRequestException(PAST_BOOKING_ERROR);
+      throw new BadRequestException(BOOKING_ERRORS.PAST_BOOKING);
     }
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -57,7 +52,7 @@ export class BookingsService {
       });
 
       if (!workspace) {
-        throw new BadRequestException(WORKSPACE_NOT_FOUND_ERROR);
+        throw new BadRequestException(BOOKING_ERRORS.WORKSPACE_NOT_FOUND);
       }
 
       const isBookingOverlap = await queryRunner.manager
@@ -77,12 +72,50 @@ export class BookingsService {
         .getOne();
 
       if (isBookingOverlap) {
-        throw new ConflictException(WORKSPACE_OCCUPIED_ERROR);
+        throw new ConflictException(BOOKING_ERRORS.WORKSPACE_OCCUPIED);
       }
 
       const durationHours =
         (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-      const totalPrice = Math.round(durationHours * workspace.pricePerHour);
+      let totalPrice = Math.round(durationHours * workspace.pricePerHour);
+      let appliedPromoCode: PromoCode | null = null;
+
+      if (createBookingDto.promoCode) {
+        appliedPromoCode = await queryRunner.manager.findOne(PromoCode, {
+          where: { code: createBookingDto.promoCode },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (!appliedPromoCode) {
+          throw new BadRequestException(PROMO_CODE_ERRORS.INVALID);
+        }
+
+        if (!appliedPromoCode.isActive) {
+          throw new BadRequestException(PROMO_CODE_ERRORS.INACTIVE);
+        }
+
+        if (
+          appliedPromoCode.expiresAt &&
+          appliedPromoCode.expiresAt < new Date()
+        ) {
+          throw new BadRequestException(PROMO_CODE_ERRORS.EXPIRED);
+        }
+
+        if (appliedPromoCode.remainingUses === 0) {
+          throw new BadRequestException(PROMO_CODE_ERRORS.LIMIT_REACHED);
+        }
+
+        const discountAmount = Math.round(
+          totalPrice * (appliedPromoCode.discountPercentage / 100),
+        );
+        totalPrice -= discountAmount;
+
+        await this.changeUsesToPromoCode(
+          queryRunner.manager,
+          appliedPromoCode,
+          -1,
+        );
+      }
 
       const bookingId = randomUUID();
 
@@ -106,13 +139,14 @@ export class BookingsService {
         endTime: createBookingDto.endTime,
         price: totalPrice,
         paymentSessionId: session.id,
+        promoCode: appliedPromoCode ? { id: appliedPromoCode.id } : undefined,
       });
 
       await queryRunner.manager.save(booking);
 
       await queryRunner.commitTransaction();
       return {
-        message: BOOKING_CREATED_SUCCESS_MESSAGE,
+        message: BOOKING_MESSAGES.CREATED_SUCCESS,
         data: {
           bookingId,
           paymentUrl: session.url,
@@ -121,7 +155,7 @@ export class BookingsService {
     } catch {
       await queryRunner.rollbackTransaction();
       return {
-        message: BOOKING_CREATION_FAILED_MESSAGE,
+        message: BOOKING_MESSAGES.CREATION_FAILED,
         data: null,
       };
     } finally {
@@ -147,25 +181,34 @@ export class BookingsService {
   public async cancelBooking(userId: number, bookingId: string) {
     const booking = await this.dataSource.manager.findOne(Booking, {
       where: { id: bookingId, user: { id: userId } },
+      relations: { promoCode: true },
     });
 
     if (!booking) {
-      throw new BadRequestException(BOOKING_NOT_FOUND_ERROR);
+      throw new BadRequestException(BOOKING_ERRORS.NOT_FOUND);
     }
 
     if (booking.status !== BookingStatus.PENDING) {
-      throw new BadRequestException(BOOKING_ALREADY_CONFIRMED_ERROR);
+      throw new BadRequestException(BOOKING_ERRORS.ALREADY_CONFIRMED);
     }
 
     if (booking.paymentSessionId) {
       await this.stripeService.expireSession(booking.paymentSessionId);
     }
 
+    if (booking.promoCode) {
+      await this.changeUsesToPromoCode(
+        this.dataSource.manager,
+        booking.promoCode,
+        1,
+      );
+    }
+
     booking.status = BookingStatus.CANCELLED;
     await this.dataSource.manager.save(booking);
 
     return {
-      message: BOOKING_CANCELLED_SUCCESS_MESSAGE,
+      message: BOOKING_MESSAGES.CANCELLED_SUCCESS,
       data: null,
     };
   }
@@ -179,6 +222,7 @@ export class BookingsService {
         status: BookingStatus.PENDING,
         createdAt: Raw((alias) => `${alias} < NOW() - INTERVAL '10 minutes'`),
       },
+      relations: { promoCode: true },
     });
 
     this.logger.warn(
@@ -190,6 +234,15 @@ export class BookingsService {
         if (booking.paymentSessionId) {
           await this.stripeService.expireSession(booking.paymentSessionId);
         }
+
+        if (booking.promoCode) {
+          await this.changeUsesToPromoCode(
+            this.dataSource.manager,
+            booking.promoCode,
+            1,
+          );
+        }
+
         booking.status = BookingStatus.CANCELLED;
         await this.dataSource.manager.save(booking);
       } catch (error) {
@@ -200,5 +253,19 @@ export class BookingsService {
         );
       }
     }
+  }
+
+  private async changeUsesToPromoCode(
+    manager: EntityManager,
+    promoCode: PromoCode,
+    change: number,
+  ) {
+    await manager.update(PromoCode, promoCode.id, {
+      remainingUses: () => `remainingUses + ${change}`,
+    });
+
+    this.logger.log(
+      `Changed remaining uses for promo code ${promoCode.code} by ${change}`,
+    );
   }
 }

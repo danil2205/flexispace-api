@@ -8,6 +8,7 @@ import {
 import { User } from '../users/user.entity';
 import { Workspace } from '../workspaces/workspace.entity';
 import { BookingStatus } from './enums/booking-status.enum';
+import { PromoCode } from '../promo-codes/promo-code.entity';
 
 @Entity('Bookings')
 export class Booking {
@@ -31,6 +32,9 @@ export class Booking {
 
   @Column({ nullable: true })
   paymentSessionId: string;
+
+  @ManyToOne(() => PromoCode, { nullable: true })
+  promoCode: PromoCode;
 
   @Column({ type: 'enum', enum: BookingStatus, default: BookingStatus.PENDING })
   status: BookingStatus;
