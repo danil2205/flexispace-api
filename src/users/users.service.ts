@@ -2,7 +2,6 @@ import {
   ConflictException,
   Injectable,
   RequestTimeoutException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,8 +12,8 @@ import {
   USER_ALREADY_EXISTS,
   TIMEOUT_EXCEPTION,
   TIMEOUT_EXCEPTION_DESCRIPTION,
-  USER_NOT_FOUND,
 } from './users.constants';
+import { GoogleUser } from 'src/auth/interfaces/google-user.interface';
 
 @Injectable()
 export class UsersService {
@@ -27,7 +26,7 @@ export class UsersService {
     return this.usersRepository.find();
   }
 
-  async findOneByEmail(email: string): Promise<User> {
+  async findOneByEmail(email: string): Promise<User | null> {
     let user: User | null;
 
     try {
@@ -41,14 +40,10 @@ export class UsersService {
       });
     }
 
-    if (!user) {
-      throw new UnauthorizedException(USER_NOT_FOUND);
-    }
-
     return user;
   }
 
-  async findOneById(id: number): Promise<User> {
+  async findOneById(id: number): Promise<User | null> {
     let user: User | null;
 
     try {
@@ -62,24 +57,11 @@ export class UsersService {
       });
     }
 
-    if (!user) {
-      throw new UnauthorizedException(USER_NOT_FOUND);
-    }
-
     return user;
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    let existingUser: User | null;
-    try {
-      existingUser = await this.usersRepository.findOneBy({
-        email: createUserDto.email,
-      });
-    } catch {
-      throw new RequestTimeoutException(TIMEOUT_EXCEPTION, {
-        description: TIMEOUT_EXCEPTION_DESCRIPTION,
-      });
-    }
+    const existingUser = await this.findOneByEmail(createUserDto.email);
 
     if (existingUser) {
       throw new ConflictException(USER_ALREADY_EXISTS);
@@ -101,6 +83,36 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async createOAuthUser(profile: GoogleUser) {
+    let user = await this.findOneByEmail(profile.email);
+
+    if (user) {
+      throw new ConflictException(USER_ALREADY_EXISTS);
+    }
+
+    user = this.usersRepository.create(profile);
+
+    try {
+      user = await this.usersRepository.save(user);
+    } catch {
+      throw new RequestTimeoutException(TIMEOUT_EXCEPTION, {
+        description: TIMEOUT_EXCEPTION_DESCRIPTION,
+      });
+    }
+
+    return user;
+  }
+
+  async update(id: number, attrs: Partial<User>) {
+    try {
+      await this.usersRepository.update(id, attrs);
+    } catch {
+      throw new RequestTimeoutException(TIMEOUT_EXCEPTION, {
+        description: TIMEOUT_EXCEPTION_DESCRIPTION,
+      });
+    }
   }
 
   async updateRefreshToken(userId: number, refreshToken: string | null) {

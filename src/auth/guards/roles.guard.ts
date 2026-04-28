@@ -7,7 +7,7 @@ import {
 import { Observable } from 'rxjs';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { RequestWithUser } from '../interfaces/request-with-user.interface';
+import { ActiveUserData } from '../interfaces/active-user-data.interface';
 import { ACCESS_DENIED } from '../auth.constants';
 import { UserRole } from '../../users/enums/user-role.enum';
 
@@ -22,8 +22,9 @@ export class RolesGuard implements CanActivate {
       ROLES_KEY,
       [context.getHandler(), context.getClass()],
     );
-    const request = context.switchToHttp().getRequest<RequestWithUser>();
-    const user = request.user;
+    const user = context
+      .switchToHttp()
+      .getRequest<{ user: ActiveUserData }>().user;
     const hasRole = requiredRoles.includes(user.role);
     if (!hasRole) {
       throw new ForbiddenException(ACCESS_DENIED);

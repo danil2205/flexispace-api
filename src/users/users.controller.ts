@@ -4,7 +4,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from './enums/user-role.enum';
-import { ActiveUser } from '../auth/decorators/active-user.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -23,7 +23,7 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiOkResponse({ description: 'Current user profile' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  public async getProfile(@ActiveUser('sub') userId: number) {
+  public async getProfile(@CurrentUser('sub') userId: number) {
     return this.usersService.findOneById(userId);
   }
 

@@ -10,15 +10,18 @@ import * as bcrypt from 'bcrypt';
 import jwtConfig from './config/jwt.config';
 import { ConfigType } from '@nestjs/config';
 import { User } from '../users/user.entity';
-import { ActiveUserData } from './interfaces/active-user-data.interface';
 import { SignInUserDto } from './dtos/signin-user-dto';
 import {
   ACCESS_DENIED,
   INVALID_CREDENTIALS,
   INVALID_TOKEN,
   LOGGED_OUT_MESSAGE,
+  OAUTH_LOGIN_REQUIRED,
   TOKEN_EXPIRED,
+  USER_NOT_FOUND,
 } from './auth.constants';
+import { GoogleUser } from './interfaces/google-user.interface';
+import { ActiveUserData } from './interfaces/active-user-data.interface';
 
 @Injectable()
 export class AuthService {
@@ -36,9 +39,34 @@ export class AuthService {
 
   public async signIn({ email, password }: SignInUserDto) {
     const user = await this.usersService.findOneByEmail(email);
+
+    if (!user) {
+      throw new UnauthorizedException(USER_NOT_FOUND);
+    }
+
+    if (!user.password) {
+      throw new UnauthorizedException(OAUTH_LOGIN_REQUIRED);
+    }
+
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException(INVALID_CREDENTIALS);
+    }
+
+    return this.generateTokens(user);
+  }
+
+  public async validateGoogleUser(googleUser: GoogleUser) {
+    let user = await this.usersService.findOneByEmail(googleUser.email);
+
+    if (user) {
+      if (!user.googleId) {
+        await this.usersService.update(user.id, {
+          googleId: googleUser.googleId,
+        });
+      }
+    } else {
+      user = await this.usersService.createOAuthUser(googleUser);
     }
 
     return this.generateTokens(user);
@@ -90,6 +118,11 @@ export class AuthService {
     }
 
     const user = await this.usersService.findOneById(payload.sub);
+
+    if (!user) {
+      throw new UnauthorizedException(USER_NOT_FOUND);
+    }
+
     if (!user.refreshToken) {
       throw new ForbiddenException(ACCESS_DENIED);
     }
@@ -98,6 +131,7 @@ export class AuthService {
       refreshToken,
       user.refreshToken,
     );
+
     if (!isRefreshTokenValid) {
       throw new UnauthorizedException(INVALID_TOKEN);
     }

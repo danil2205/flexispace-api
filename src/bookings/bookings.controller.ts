@@ -2,7 +2,7 @@ import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CreateBookingDto } from './dtos/create-booking.dto';
-import { ActiveUser } from 'src/auth/decorators/active-user.decorator';
+import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -29,7 +29,7 @@ export class BookingsController {
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   createBooking(
-    @ActiveUser('sub') id: number,
+    @CurrentUser('sub') id: number,
     @Body() createBookingDto: CreateBookingDto,
   ) {
     return this.bookingsService.createBooking(id, createBookingDto);
@@ -50,7 +50,7 @@ export class BookingsController {
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   cancelBooking(
-    @ActiveUser('sub') id: number,
+    @CurrentUser('sub') id: number,
     @Param() { id: bookingId }: CancelBookingParamDto,
   ) {
     return this.bookingsService.cancelBooking(id, bookingId);

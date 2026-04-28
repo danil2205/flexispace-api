@@ -4,14 +4,12 @@ import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
-import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from './auth/auth.module';
 import { FilesModule } from './files/files.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
 import { PaginationModule } from './common/pagination/pagination.module';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
-import jwtConfig from './auth/config/jwt.config';
 import awsConfig from './config/aws.config';
 import redisConfig from './config/redis.config';
 import paymentConfig from './config/payment.config';
@@ -34,8 +32,6 @@ const ENV = process.env.NODE_ENV;
       load: [appConfig, databaseConfig, awsConfig, redisConfig, paymentConfig],
       validationSchema: environmentValidation,
     }),
-    ConfigModule.forFeature(jwtConfig),
-    JwtModule.registerAsync(jwtConfig.asProvider()),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
