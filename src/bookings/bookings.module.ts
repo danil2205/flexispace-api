@@ -6,11 +6,13 @@ import { BookingsController } from './bookings.controller';
 import { StripeModule } from 'src/stripe/stripe.module';
 import { PromoCode } from '../promo-codes/promo-code.entity';
 import { PromoCodesModule } from 'src/promo-codes/promo-codes.module';
+import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   providers: [BookingsService],
   imports: [
     TypeOrmModule.forFeature([Booking, PromoCode]),
+    BullModule.registerQueue({ name: 'emails' }),
     StripeModule,
     PromoCodesModule,
   ],

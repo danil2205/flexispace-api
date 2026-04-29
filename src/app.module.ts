@@ -22,6 +22,8 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
+import { BullModule } from '@nestjs/bullmq';
+import { MailModule } from './mail/mail.module';
 
 const ENV = process.env.NODE_ENV;
 @Module({
@@ -59,6 +61,16 @@ const ENV = process.env.NODE_ENV;
         ttl: configService.get('redis.ttl'),
       }),
     }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        connection: {
+          host: configService.get<string>('redis.host'),
+          port: configService.get<number>('redis.port'),
+        },
+      }),
+    }),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     UsersModule,
@@ -70,6 +82,7 @@ const ENV = process.env.NODE_ENV;
     StripeModule,
     NotificationsModule,
     PromoCodesModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

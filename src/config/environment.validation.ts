@@ -35,4 +35,11 @@ export default Joi.object({
   GOOGLE_CLIENT_ID: Joi.string().required(),
   GOOGLE_CLIENT_SECRET: Joi.string().required(),
   GOOGLE_CALLBACK_URL: Joi.string().required(),
+
+  SMTP_HOST: Joi.string().required(),
+  SMTP_PORT: Joi.string().required(),
+  SMTP_USER: Joi.string().required(),
+  SMTP_PASS: Joi.string().required(),
+  SMTP_SENDER: Joi.string().required(),
+  SMTP_TOKEN: Joi.string().required(),
 });

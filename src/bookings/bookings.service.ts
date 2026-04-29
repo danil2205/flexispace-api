@@ -17,6 +17,8 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PromoCode } from '../promo-codes/promo-code.entity';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PromoCodeValidatorService } from '../promo-codes/promo-code-validator.service';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class BookingsService {
@@ -27,6 +29,7 @@ export class BookingsService {
     private readonly stripeService: StripeService,
     private readonly promoCodesService: PromoCodesService,
     private readonly promoCodeValidatorService: PromoCodeValidatorService,
+    @InjectQueue('emails') private emailQueue: Queue,
   ) {}
 
   async createBooking(id: number, createBookingDto: CreateBookingDto) {
@@ -142,11 +145,31 @@ export class BookingsService {
 
     const booking = await this.dataSource.manager.findOne(Booking, {
       where: { id: bookingId },
+      relations: { user: true, workspace: true },
     });
 
     if (booking && booking.status === BookingStatus.PENDING) {
       booking.status = BookingStatus.CONFIRMED;
       await this.dataSource.manager.save(booking);
+
+      await this.emailQueue.add(
+        'send-receipt',
+        {
+          userName: booking.user.firstName,
+          email: booking.user.email,
+          workspaceTitle: booking.workspace.title,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          totalPrice: booking.price,
+        },
+        {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 5000,
+          },
+        },
+      );
     }
   }
 
