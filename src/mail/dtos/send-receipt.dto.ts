@@ -1,5 +1,12 @@
 import { Type } from 'class-transformer';
-import { IsDate, IsEmail, IsNumber, IsString, Min } from 'class-validator';
+import {
+  IsDate,
+  IsEmail,
+  IsISO4217CurrencyCode,
+  IsNumber,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class SendReceiptDto {
   @IsEmail()
@@ -22,4 +29,8 @@ export class SendReceiptDto {
   @IsNumber()
   @Min(0)
   totalPrice: number;
+
+  @IsString()
+  @IsISO4217CurrencyCode()
+  currency: string;
 }

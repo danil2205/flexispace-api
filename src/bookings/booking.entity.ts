@@ -33,6 +33,9 @@ export class Booking {
   @Column({ nullable: true })
   paymentSessionId: string;
 
+  @Column({ type: 'varchar', length: 3, default: 'UAH' })
+  currency: string;
+
   @ManyToOne(() => PromoCode, { nullable: true })
   promoCode: PromoCode;
 

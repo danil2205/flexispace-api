@@ -99,7 +99,7 @@ export class BookingsService {
 
       const bookingId = randomUUID();
       const session = await this.stripeService.createCheckoutSession({
-        amount: totalPrice,
+        amount: totalPrice * 100,
         currency: 'PLN',
         productName: `Booking ${workspace.title}`,
         description: `Booking from ${start.toLocaleString()} to ${end.toLocaleString()}`,
@@ -139,7 +139,13 @@ export class BookingsService {
   }
 
   @OnEvent('payment.success')
-  public async confirmBooking(metadata: Record<string, string>) {
+  public async confirmBooking(
+    metadata: Record<string, string>,
+    payment: {
+      presentment_amount: number;
+      presentment_currency: string;
+    },
+  ) {
     const bookingId = metadata.bookingId;
     if (!bookingId) return;
 
@@ -150,6 +156,8 @@ export class BookingsService {
 
     if (booking && booking.status === BookingStatus.PENDING) {
       booking.status = BookingStatus.CONFIRMED;
+      booking.currency = payment.presentment_currency.toUpperCase();
+      booking.price = payment.presentment_amount;
       await this.dataSource.manager.save(booking);
 
       await this.emailQueue.add(
@@ -161,6 +169,7 @@ export class BookingsService {
           startTime: booking.startTime,
           endTime: booking.endTime,
           totalPrice: booking.price,
+          currency: booking.currency,
         },
         {
           attempts: 3,
