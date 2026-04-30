@@ -20,26 +20,31 @@ export class StripeService {
   }
 
   public async createCheckoutSession(params: CreateCheckoutSessionParams) {
-    return this.stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: params.currency || 'UAH',
-            product_data: {
-              name: params.productName,
-              description: params.description,
+    return this.stripe.checkout.sessions.create(
+      {
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: params.currency || 'UAH',
+              product_data: {
+                name: params.productName,
+                description: params.description,
+              },
+              unit_amount: params.amount,
             },
-            unit_amount: params.amount,
+            quantity: 1,
           },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: params.successUrl,
-      cancel_url: params.cancelUrl,
-      metadata: params.metadata,
-    });
+        ],
+        mode: 'payment',
+        success_url: params.successUrl,
+        cancel_url: params.cancelUrl,
+        metadata: params.metadata,
+      },
+      {
+        idempotencyKey: `checkout-session-${params.metadata.bookingId}`,
+      },
+    );
   }
 
   public constructEvent(payload: Buffer, signature: string) {
