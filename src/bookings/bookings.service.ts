@@ -19,6 +19,7 @@ import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PromoCodeValidatorService } from '../promo-codes/promo-code-validator.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 
 @Injectable()
 export class BookingsService {
@@ -29,6 +30,7 @@ export class BookingsService {
     private readonly stripeService: StripeService,
     private readonly promoCodesService: PromoCodesService,
     private readonly promoCodeValidatorService: PromoCodeValidatorService,
+    private readonly notificationsGateway: NotificationsGateway,
     @InjectQueue('emails') private emailQueue: Queue,
   ) {}
 
@@ -114,11 +116,17 @@ export class BookingsService {
         id: bookingId,
         user: { id },
         workspace: { id: createBookingDto.workspaceId },
-        startTime: createBookingDto.startTime,
-        endTime: createBookingDto.endTime,
+        startTime: start,
+        endTime: end,
         price: totalPrice,
         paymentSessionId: session.id,
         promoCode: appliedPromoCode ? { id: appliedPromoCode.id } : undefined,
+      });
+
+      this.notificationsGateway.server.emit('workspace_locked', {
+        workspaceId: booking.workspace.id,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
       });
 
       await queryRunner.manager.save(booking);
@@ -246,6 +254,12 @@ export class BookingsService {
             1,
           );
         }
+
+        this.notificationsGateway.server.emit('workspace_freed', {
+          workspaceId: booking.workspace.id,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+        });
 
         booking.status = BookingStatus.CANCELLED;
         await this.dataSource.manager.save(booking);

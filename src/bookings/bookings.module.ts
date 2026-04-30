@@ -7,6 +7,7 @@ import { StripeModule } from 'src/stripe/stripe.module';
 import { PromoCode } from '../promo-codes/promo-code.entity';
 import { PromoCodesModule } from 'src/promo-codes/promo-codes.module';
 import { BullModule } from '@nestjs/bullmq';
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   providers: [BookingsService],
@@ -15,6 +16,7 @@ import { BullModule } from '@nestjs/bullmq';
     BullModule.registerQueue({ name: 'emails' }),
     StripeModule,
     PromoCodesModule,
+    NotificationsModule,
   ],
   controllers: [BookingsController],
 })
