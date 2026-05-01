@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { EntityManager } from 'typeorm';
 import { PromoCode } from './promo-code.entity';
-import { Booking } from 'src/bookings/booking.entity';
+import { Booking } from 'src/bookings/entities/booking.entity';
 import { Workspace } from 'src/workspaces/workspace.entity';
 import { PC_ERRORS, PC_CONDITION_ERRORS } from './promo-code.constants';
 

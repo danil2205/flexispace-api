@@ -11,4 +11,5 @@ export const BOOKING_MESSAGES = {
   CREATED_SUCCESS: 'Booking created successfully',
   CREATION_FAILED: 'Booking creation failed',
   CANCELLED_SUCCESS: 'Booking cancelled successfully',
+  WAITLISTED_SUCCESS: 'Waitlist created successfully',
 } as const;

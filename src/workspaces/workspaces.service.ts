@@ -17,7 +17,7 @@ import {
   INVALID_DATE_RANGE_ERROR,
   PAST_TIME_ERROR,
 } from './workspaces.constants';
-import { Booking } from 'src/bookings/booking.entity';
+import { Booking } from 'src/bookings/entities/booking.entity';
 import { BookingStatus } from 'src/bookings/enums/booking-status.enum';
 import { GetAvailableWorkspacesDto } from './dtos/get-available-workspaces.dto';
 

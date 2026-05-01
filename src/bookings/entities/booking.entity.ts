@@ -5,10 +5,10 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { User } from '../users/user.entity';
-import { Workspace } from '../workspaces/workspace.entity';
-import { BookingStatus } from './enums/booking-status.enum';
-import { PromoCode } from '../promo-codes/promo-code.entity';
+import { User } from 'src/users/user.entity';
+import { Workspace } from 'src/workspaces/workspace.entity';
+import { BookingStatus } from '../enums/booking-status.enum';
+import { PromoCode } from 'src/promo-codes/promo-code.entity';
 
 @Entity('Bookings')
 export class Booking {

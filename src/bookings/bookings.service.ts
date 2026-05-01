@@ -4,7 +4,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
-import { Booking } from './booking.entity';
+import { Booking } from './entities/booking.entity';
 import { DataSource, EntityManager, Raw } from 'typeorm';
 import { CreateBookingDto } from './dtos/create-booking.dto';
 import { BOOKING_ERRORS, BOOKING_MESSAGES } from './booking.constants';
@@ -20,6 +20,8 @@ import { PromoCodeValidatorService } from '../promo-codes/promo-code-validator.s
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
+import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
+import { Waitlist } from './entities/waitlist.entity';
 
 @Injectable()
 export class BookingsService {
@@ -102,14 +104,14 @@ export class BookingsService {
       const bookingId = randomUUID();
       const session = await this.stripeService.createCheckoutSession({
         amount: totalPrice * 100,
-        currency: 'PLN',
+        currency: 'UAH',
         productName: `Booking ${workspace.title}`,
         description: `Booking from ${start.toLocaleString()} to ${end.toLocaleString()}`,
         metadata: {
           bookingId,
         },
-        successUrl: 'http://localhost:3000/api/success',
-        cancelUrl: `http://localhost:3000/api/cancel?bookingId=${bookingId}`,
+        successUrl: 'http://localhost:3500/payment/success',
+        cancelUrl: `http://localhost:3500/payment/cancel?bookingId=${bookingId}`,
       });
 
       const booking = queryRunner.manager.create(Booking, {
@@ -149,7 +151,7 @@ export class BookingsService {
   @OnEvent('payment.success')
   public async confirmBooking(
     metadata: Record<string, string>,
-    payment: {
+    payment?: {
       presentment_amount: number;
       presentment_currency: string;
     },
@@ -164,8 +166,10 @@ export class BookingsService {
 
     if (booking && booking.status === BookingStatus.PENDING) {
       booking.status = BookingStatus.CONFIRMED;
-      booking.currency = payment.presentment_currency.toUpperCase();
-      booking.price = payment.presentment_amount;
+      if (payment) {
+        booking.currency = payment.presentment_currency.toUpperCase();
+        booking.price = Math.floor(payment.presentment_amount / 100);
+      }
       await this.dataSource.manager.save(booking);
 
       await this.emailQueue.add(
@@ -176,7 +180,9 @@ export class BookingsService {
           workspaceTitle: booking.workspace.title,
           startTime: booking.startTime,
           endTime: booking.endTime,
-          totalPrice: booking.price,
+          totalPrice: payment
+            ? payment.presentment_amount / 100
+            : booking.price,
           currency: booking.currency,
         },
         {
@@ -225,6 +231,41 @@ export class BookingsService {
     };
   }
 
+  public async joinWaitlist(id: number, createWaitlistDto: CreateWaitlistDto) {
+    const startTime = new Date(createWaitlistDto.startTime);
+    const endTime = new Date(createWaitlistDto.endTime);
+
+    if (startTime >= endTime) {
+      throw new BadRequestException('Start time must be before end time');
+    }
+
+    if (startTime < new Date()) {
+      throw new BadRequestException('Start time cannot be in the past');
+    }
+
+    const workspace = await this.dataSource.manager.findOne(Workspace, {
+      where: { id: createWaitlistDto.workspaceId },
+    });
+
+    if (!workspace) {
+      throw new BadRequestException(BOOKING_ERRORS.WORKSPACE_NOT_FOUND);
+    }
+
+    const waitlist = this.dataSource.manager.create(Waitlist, {
+      user: { id },
+      workspace,
+      startTime,
+      endTime,
+    });
+
+    await this.dataSource.manager.save(waitlist);
+
+    return {
+      message: BOOKING_MESSAGES.WAITLISTED_SUCCESS,
+      data: null,
+    };
+  }
+
   @Cron(CronExpression.EVERY_MINUTE)
   public async cancelExpiredBookings() {
     this.logger.debug('Checking for expired bookings');
@@ -255,14 +296,16 @@ export class BookingsService {
           );
         }
 
+        booking.status = BookingStatus.CANCELLED;
+        await this.dataSource.manager.save(booking);
+
         this.notificationsGateway.server.emit('workspace_freed', {
           workspaceId: booking.workspace.id,
           startTime: booking.startTime,
           endTime: booking.endTime,
         });
 
-        booking.status = BookingStatus.CANCELLED;
-        await this.dataSource.manager.save(booking);
+        await this.notifyWaitlistUsers(booking);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : JSON.stringify(error);
@@ -271,6 +314,41 @@ export class BookingsService {
         );
       }
     }
+  }
+
+  private async notifyWaitlistUsers(booking: Booking) {
+    const waitingUsers = await this.dataSource.manager.find(Waitlist, {
+      where: {
+        workspace: { id: booking.workspace.id },
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+      },
+      relations: { user: true, workspace: true },
+    });
+
+    if (waitingUsers.length === 0) return;
+
+    for (const waitingUser of waitingUsers) {
+      await this.emailQueue.add(
+        'send-waitlist-notification',
+        {
+          email: waitingUser.user.email,
+          username: waitingUser.user.firstName,
+          workspaceTitle: waitingUser.workspace.title,
+          startTime: waitingUser.startTime,
+          endTime: waitingUser.endTime,
+        },
+        {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      );
+    }
+
+    await this.dataSource.manager.remove(waitingUsers);
   }
 
   private async isBookingOverlap(

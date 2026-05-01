@@ -13,6 +13,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { CancelBookingParamDto } from './dtos/cancel-booking-param.dto';
+import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('bearer')
@@ -54,5 +55,20 @@ export class BookingsController {
     @Param() { id: bookingId }: CancelBookingParamDto,
   ) {
     return this.bookingsService.cancelBooking(id, bookingId);
+  }
+
+  @Post('waitlist')
+  @ApiOperation({ summary: 'Join waitlist' })
+  @ApiBody({ type: CreateWaitlistDto })
+  @ApiOkResponse({ description: 'Joined waitlist successfully' })
+  @ApiBadRequestResponse({
+    description: 'Invalid waitlist data or workspace not available',
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  async joinWaitlist(
+    @CurrentUser('sub') id: number,
+    @Body() createWaitlistDto: CreateWaitlistDto,
+  ) {
+    return this.bookingsService.joinWaitlist(id, createWaitlistDto);
   }
 }
