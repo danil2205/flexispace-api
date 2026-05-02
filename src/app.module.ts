@@ -24,6 +24,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PromoCodesModule } from './promo-codes/promo-codes.module';
 import { BullModule } from '@nestjs/bullmq';
 import { MailModule } from './mail/mail.module';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 const ENV = process.env.NODE_ENV;
 @Module({
@@ -71,6 +73,22 @@ const ENV = process.env.NODE_ENV;
         },
       }),
     }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: configService.getOrThrow<number>(
+              'appConfig.throttling.windowMs',
+            ),
+            limit: configService.getOrThrow<number>(
+              'appConfig.throttling.limit',
+            ),
+          },
+        ],
+      }),
+    }),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     UsersModule,
@@ -85,6 +103,12 @@ const ENV = process.env.NODE_ENV;
     MailModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

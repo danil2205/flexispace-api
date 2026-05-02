@@ -17,6 +17,7 @@ import { CancelBookingParamDto } from './dtos/cancel-booking-param.dto';
 import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
 import { AntiFraudLimit } from 'src/auth/decorators/anti-fraud-limit.decorator';
 import { AntiFraudGuard } from 'src/auth/guards/anti-fraud.guard';
+import { Throttle } from '@nestjs/throttler';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('bearer')
@@ -27,6 +28,7 @@ export class BookingsController {
   @Post()
   @UseGuards(AntiFraudGuard)
   @AntiFraudLimit(3)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Create booking' })
   @ApiBody({ type: CreateBookingDto })
   @ApiOkResponse({ description: 'Booking created successfully' })
@@ -35,7 +37,7 @@ export class BookingsController {
   })
   @ApiTooManyRequestsResponse({
     description:
-      'Too many pending bookings. Please pay for them or wait 10 minutes.',
+      'Rate limit exceeded (only 5 request per minute allowed) or too many pending bookings.',
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   createBooking(

@@ -42,4 +42,7 @@ export default Joi.object({
   SMTP_PASS: Joi.string().required(),
   SMTP_SENDER: Joi.string().required(),
   SMTP_TOKEN: Joi.string().required(),
+
+  THROTTLING_WINDOW_MS: Joi.number().required(),
+  THROTTLING_LIMIT: Joi.number().required(),
 });
