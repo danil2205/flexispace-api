@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import paymentConfig from '../config/payment.config';
 import { ConfigType } from '@nestjs/config';
 import { CreateCheckoutSessionParams } from './interfaces/create-checkout-session.interface';
+import { STRIPE_ERRORS } from './stripe.constants';
 
 @Injectable()
 export class StripeService {
@@ -45,6 +46,31 @@ export class StripeService {
         idempotencyKey: `checkout-session-${params.metadata.bookingId}`,
       },
     );
+  }
+
+  public async refundPaymentBySession(
+    sessionId: string,
+    amountToRefund: number,
+  ) {
+    try {
+      const session = await this.stripe.checkout.sessions.retrieve(sessionId);
+      const paymentIntent = session.payment_intent as string;
+
+      if (!paymentIntent) {
+        throw new BadRequestException(STRIPE_ERRORS.PAYMENT_INTENT_NOT_FOUND);
+      }
+
+      const refund = await this.stripe.refunds.create({
+        payment_intent: paymentIntent,
+        amount: Math.round(amountToRefund * 100),
+      });
+
+      return refund.id;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      throw new BadRequestException(`Refund error: ${message}`);
+    }
   }
 
   public constructEvent(payload: Buffer, signature: string) {

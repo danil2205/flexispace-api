@@ -4,7 +4,8 @@ export const BOOKING_ERRORS = {
   WORKSPACE_NOT_FOUND: 'Workspace not found',
   WORKSPACE_OCCUPIED: 'Workspace is already booked',
   NOT_FOUND: 'Booking not found',
-  ALREADY_CONFIRMED: 'Booking already confirmed or cancelled',
+  ALREADY_CANCELLED: 'Booking already cancelled',
+  TOO_LATE_TO_CANCEL: 'Too late to cancel booking',
 } as const;
 
 export const BOOKING_MESSAGES = {

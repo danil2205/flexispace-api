@@ -17,8 +17,10 @@ import {
   ApiOkResponse,
   ApiOperation,
 } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @Controller('stripe')
+@SkipThrottle()
 export class StripeController {
   constructor(
     private readonly stripeService: StripeService,

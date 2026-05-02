@@ -30,6 +30,8 @@ import { AntiFraudCacheData } from 'src/auth/interfaces/anti-fraud-cache-data.in
 @Injectable()
 export class BookingsService {
   private readonly logger = new Logger(BookingsService.name);
+  MINIMUM_CANCELLATION_HOURS = 2;
+  FULL_REFUND_HOURS_THRESHOLD = 24;
 
   constructor(
     private readonly dataSource: DataSource,
@@ -212,29 +214,60 @@ export class BookingsService {
       throw new BadRequestException(BOOKING_ERRORS.NOT_FOUND);
     }
 
-    if (booking.status !== BookingStatus.PENDING) {
-      throw new BadRequestException(BOOKING_ERRORS.ALREADY_CONFIRMED);
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new BadRequestException(BOOKING_ERRORS.ALREADY_CANCELLED);
     }
 
-    if (booking.paymentSessionId) {
-      await this.stripeService.expireSession(booking.paymentSessionId);
-    }
+    const isPending = booking.status === BookingStatus.PENDING;
+    let amountToRefund = 0;
+    let penaltyApplied = false;
 
-    if (booking.promoCode) {
-      await this.promoCodesService.changeUses(
-        this.dataSource.manager,
-        booking.promoCode.id,
-        1,
-      );
+    if (isPending) {
+      if (booking.paymentSessionId) {
+        await this.stripeService.expireSession(booking.paymentSessionId);
+      }
+
+      if (booking.promoCode) {
+        await this.promoCodesService.changeUses(
+          this.dataSource.manager,
+          booking.promoCode.id,
+          1,
+        );
+      }
+
+      await this.decreasePendingBookingsCount(booking.user.id);
+    } else {
+      const now = new Date().getTime();
+      const startTime = new Date(booking.startTime).getTime();
+      const hoursUntilStart = (startTime - now) / (1000 * 60 * 60);
+
+      if (hoursUntilStart < this.MINIMUM_CANCELLATION_HOURS) {
+        throw new BadRequestException(BOOKING_ERRORS.TOO_LATE_TO_CANCEL);
+      }
+
+      const refundPercentage =
+        hoursUntilStart >= this.FULL_REFUND_HOURS_THRESHOLD ? 1.0 : 0.5;
+      amountToRefund = booking.price * refundPercentage;
+      penaltyApplied = refundPercentage < 1.0;
+
+      if (amountToRefund > 0) {
+        await this.stripeService.refundPaymentBySession(
+          booking.paymentSessionId,
+          amountToRefund,
+        );
+      }
     }
 
     booking.status = BookingStatus.CANCELLED;
     await this.dataSource.manager.save(booking);
-    await this.decreasePendingBookingsCount(booking.user.id);
+    await this.notifyWaitlistUsers(booking);
 
     return {
       message: BOOKING_MESSAGES.CANCELLED_SUCCESS,
-      data: null,
+      data: {
+        refundedAmount: amountToRefund,
+        penaltyApplied,
+      },
     };
   }
 
