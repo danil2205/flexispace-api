@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   Logger,
 } from '@nestjs/common';
@@ -22,9 +23,12 @@ import { Queue } from 'bullmq';
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
 import { Waitlist } from './entities/waitlist.entity';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Injectable()
 export class BookingsService {
+  readonly PENDING_BOOKING_TTL_MS: number = 600000;
   private readonly logger = new Logger(BookingsService.name);
 
   constructor(
@@ -33,6 +37,7 @@ export class BookingsService {
     private readonly promoCodesService: PromoCodesService,
     private readonly promoCodeValidatorService: PromoCodeValidatorService,
     private readonly notificationsGateway: NotificationsGateway,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     @InjectQueue('emails') private emailQueue: Queue,
   ) {}
 
@@ -171,6 +176,7 @@ export class BookingsService {
         booking.price = Math.floor(payment.presentment_amount / 100);
       }
       await this.dataSource.manager.save(booking);
+      await this.decreasePendingBookingsCount(booking.user.id);
 
       await this.emailQueue.add(
         'send-receipt',
@@ -224,6 +230,7 @@ export class BookingsService {
 
     booking.status = BookingStatus.CANCELLED;
     await this.dataSource.manager.save(booking);
+    await this.decreasePendingBookingsCount(booking.user.id);
 
     return {
       message: BOOKING_MESSAGES.CANCELLED_SUCCESS,
@@ -298,6 +305,7 @@ export class BookingsService {
 
         booking.status = BookingStatus.CANCELLED;
         await this.dataSource.manager.save(booking);
+        await this.decreasePendingBookingsCount(booking.user.id);
 
         this.notificationsGateway.server.emit('workspace_freed', {
           workspaceId: booking.workspace.id,
@@ -313,6 +321,19 @@ export class BookingsService {
           `Booking ${booking.id} could not be cancelled: ${message}`,
         );
       }
+    }
+  }
+
+  private async decreasePendingBookingsCount(userId: number) {
+    const redisKey = `antifraud:pending_bookings:user:${userId}`;
+    const currentCount = (await this.cacheManager.get<number>(redisKey)) || 0;
+
+    if (currentCount > 0) {
+      await this.cacheManager.set(
+        redisKey,
+        currentCount - 1,
+        this.PENDING_BOOKING_TTL_MS,
+      );
     }
   }
 

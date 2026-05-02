@@ -10,10 +10,13 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { CancelBookingParamDto } from './dtos/cancel-booking-param.dto';
 import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
+import { AntiFraudLimit } from 'src/auth/decorators/anti-fraud-limit.decorator';
+import { AntiFraudGuard } from 'src/auth/guards/anti-fraud.guard';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth('bearer')
@@ -22,11 +25,17 @@ export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
   @Post()
+  @UseGuards(AntiFraudGuard)
+  @AntiFraudLimit(3)
   @ApiOperation({ summary: 'Create booking' })
   @ApiBody({ type: CreateBookingDto })
   @ApiOkResponse({ description: 'Booking created successfully' })
   @ApiBadRequestResponse({
     description: 'Invalid booking data or workspace not available',
+  })
+  @ApiTooManyRequestsResponse({
+    description:
+      'Too many pending bookings. Please pay for them or wait 10 minutes.',
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   createBooking(
