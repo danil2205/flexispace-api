@@ -25,10 +25,10 @@ import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
 import { Waitlist } from './entities/waitlist.entity';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { AntiFraudCacheData } from 'src/auth/interfaces/anti-fraud-cache-data.interface';
 
 @Injectable()
 export class BookingsService {
-  readonly PENDING_BOOKING_TTL_MS: number = 600000;
   private readonly logger = new Logger(BookingsService.name);
 
   constructor(
@@ -326,14 +326,17 @@ export class BookingsService {
 
   private async decreasePendingBookingsCount(userId: number) {
     const redisKey = `antifraud:pending_bookings:user:${userId}`;
-    const currentCount = (await this.cacheManager.get<number>(redisKey)) || 0;
+    const now = Date.now();
+    const redisData = await this.cacheManager.get<AntiFraudCacheData>(redisKey);
 
-    if (currentCount > 0) {
-      await this.cacheManager.set(
-        redisKey,
-        currentCount - 1,
-        this.PENDING_BOOKING_TTL_MS,
-      );
+    if (redisData && redisData.count > 0) {
+      redisData.count -= 1;
+      const remainingTtl = Math.max(0, redisData.expiresAt - now);
+      if (remainingTtl > 0) {
+        await this.cacheManager.set(redisKey, redisData, remainingTtl);
+      } else {
+        await this.cacheManager.del(redisKey);
+      }
     }
   }
 

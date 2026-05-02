@@ -11,6 +11,7 @@ import { ANTI_FRAUD_LIMIT_KEY } from '../decorators/anti-fraud-limit.decorator';
 import { ActiveUserData } from '../interfaces/active-user-data.interface';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import { AntiFraudCacheData } from '../interfaces/anti-fraud-cache-data.interface';
 
 @Injectable()
 export class AntiFraudGuard implements CanActivate {
@@ -34,20 +35,30 @@ export class AntiFraudGuard implements CanActivate {
       .getRequest<{ user: ActiveUserData }>().user;
 
     const redisKey = `antifraud:pending_bookings:user:${user.sub}`;
-    const currentCount = (await this.cacheManager.get<number>(redisKey)) || 0;
+    const now = Date.now();
+    let redisData = await this.cacheManager.get<AntiFraudCacheData>(redisKey);
 
-    if (currentCount >= limit) {
+    if (!redisData || now > redisData.expiresAt) {
+      redisData = {
+        count: 0,
+        expiresAt: now + this.PENDING_BOOKING_TTL_MS,
+      };
+    }
+
+    if (redisData.count >= limit) {
       throw new HttpException(
         'Too many pending bookings. Please pay for them or wait 10 minutes.',
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
-    await this.cacheManager.set(
-      redisKey,
-      currentCount + 1,
-      this.PENDING_BOOKING_TTL_MS,
-    );
+    redisData.count += 1;
+    const remainingTtl = Math.max(0, redisData.expiresAt - now);
+    if (remainingTtl > 0) {
+      await this.cacheManager.set(redisKey, redisData, remainingTtl);
+    } else {
+      await this.cacheManager.del(redisKey);
+    }
 
     return true;
   }
