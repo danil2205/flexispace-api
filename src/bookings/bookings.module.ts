@@ -9,9 +9,19 @@ import { PromoCodesModule } from 'src/promo-codes/promo-codes.module';
 import { BullModule } from '@nestjs/bullmq';
 import { NotificationsModule } from 'src/notifications/notifications.module';
 import { Waitlist } from './entities/waitlist.entity';
+import { AntifraudListener } from './listeners/antifraud.listener';
+import { StripeListener } from './listeners/stripe.listener';
+import { PromoCodeListener } from './listeners/promo-code.listener';
+import { NotificationsListener } from './listeners/notifications.listener';
 
 @Module({
-  providers: [BookingsService],
+  providers: [
+    BookingsService,
+    AntifraudListener,
+    StripeListener,
+    PromoCodeListener,
+    NotificationsListener,
+  ],
   imports: [
     TypeOrmModule.forFeature([Booking, PromoCode, Waitlist]),
     BullModule.registerQueue({ name: 'emails' }),

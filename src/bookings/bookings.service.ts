@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  Inject,
   Injectable,
   Logger,
 } from '@nestjs/common';
@@ -12,20 +11,16 @@ import { BOOKING_ERRORS, BOOKING_MESSAGES } from './booking.constants';
 import { Workspace } from 'src/workspaces/workspace.entity';
 import { BookingStatus } from './enums/booking-status.enum';
 import { StripeService } from 'src/stripe/stripe.service';
-import { OnEvent } from '@nestjs/event-emitter';
+import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PromoCode } from '../promo-codes/promo-code.entity';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PromoCodeValidatorService } from '../promo-codes/promo-code-validator.service';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
 import { Waitlist } from './entities/waitlist.entity';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
-import { AntiFraudCacheData } from 'src/auth/interfaces/anti-fraud-cache-data.interface';
+import { BookingCancelledEvent } from './events/booking-cancelled.event';
 
 @Injectable()
 export class BookingsService {
@@ -39,8 +34,7 @@ export class BookingsService {
     private readonly promoCodesService: PromoCodesService,
     private readonly promoCodeValidatorService: PromoCodeValidatorService,
     private readonly notificationsGateway: NotificationsGateway,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
-    @InjectQueue('emails') private emailQueue: Queue,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async createBooking(id: number, createBookingDto: CreateBookingDto) {
@@ -178,29 +172,8 @@ export class BookingsService {
         booking.price = Math.floor(payment.presentment_amount / 100);
       }
       await this.dataSource.manager.save(booking);
-      await this.decreasePendingBookingsCount(booking.user.id);
 
-      await this.emailQueue.add(
-        'send-receipt',
-        {
-          userName: booking.user.firstName,
-          email: booking.user.email,
-          workspaceTitle: booking.workspace.title,
-          startTime: booking.startTime,
-          endTime: booking.endTime,
-          totalPrice: payment
-            ? payment.presentment_amount / 100
-            : booking.price,
-          currency: booking.currency,
-        },
-        {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 5000,
-          },
-        },
-      );
+      this.eventEmitter.emit('booking.confirmed', booking);
     }
   }
 
@@ -222,21 +195,7 @@ export class BookingsService {
     let amountToRefund = 0;
     let penaltyApplied = false;
 
-    if (isPending) {
-      if (booking.paymentSessionId) {
-        await this.stripeService.expireSession(booking.paymentSessionId);
-      }
-
-      if (booking.promoCode) {
-        await this.promoCodesService.changeUses(
-          this.dataSource.manager,
-          booking.promoCode.id,
-          1,
-        );
-      }
-
-      await this.decreasePendingBookingsCount(booking.user.id);
-    } else {
+    if (!isPending) {
       const now = new Date().getTime();
       const startTime = new Date(booking.startTime).getTime();
       const hoursUntilStart = (startTime - now) / (1000 * 60 * 60);
@@ -249,18 +208,15 @@ export class BookingsService {
         hoursUntilStart >= this.FULL_REFUND_HOURS_THRESHOLD ? 1.0 : 0.5;
       amountToRefund = booking.price * refundPercentage;
       penaltyApplied = refundPercentage < 1.0;
-
-      if (amountToRefund > 0) {
-        await this.stripeService.refundPaymentBySession(
-          booking.paymentSessionId,
-          amountToRefund,
-        );
-      }
     }
 
     booking.status = BookingStatus.CANCELLED;
     await this.dataSource.manager.save(booking);
-    await this.notifyWaitlistUsers(booking);
+
+    this.eventEmitter.emit(
+      'booking.cancelled',
+      new BookingCancelledEvent(booking, amountToRefund, isPending),
+    );
 
     return {
       message: BOOKING_MESSAGES.CANCELLED_SUCCESS,
@@ -324,29 +280,13 @@ export class BookingsService {
 
     for (const booking of expiredBookings) {
       try {
-        if (booking.paymentSessionId) {
-          await this.stripeService.expireSession(booking.paymentSessionId);
-        }
-
-        if (booking.promoCode) {
-          await this.promoCodesService.changeUses(
-            this.dataSource.manager,
-            booking.promoCode.id,
-            1,
-          );
-        }
-
         booking.status = BookingStatus.CANCELLED;
         await this.dataSource.manager.save(booking);
-        await this.decreasePendingBookingsCount(booking.user.id);
 
-        this.notificationsGateway.server.emit('workspace_freed', {
-          workspaceId: booking.workspace.id,
-          startTime: booking.startTime,
-          endTime: booking.endTime,
-        });
-
-        await this.notifyWaitlistUsers(booking);
+        this.eventEmitter.emit(
+          'booking.cancelled',
+          new BookingCancelledEvent(booking),
+        );
       } catch (error) {
         const message =
           error instanceof Error ? error.message : JSON.stringify(error);
@@ -355,57 +295,6 @@ export class BookingsService {
         );
       }
     }
-  }
-
-  private async decreasePendingBookingsCount(userId: number) {
-    const redisKey = `antifraud:pending_bookings:user:${userId}`;
-    const now = Date.now();
-    const redisData = await this.cacheManager.get<AntiFraudCacheData>(redisKey);
-
-    if (redisData && redisData.count > 0) {
-      redisData.count -= 1;
-      const remainingTtl = Math.max(0, redisData.expiresAt - now);
-      if (remainingTtl > 0) {
-        await this.cacheManager.set(redisKey, redisData, remainingTtl);
-      } else {
-        await this.cacheManager.del(redisKey);
-      }
-    }
-  }
-
-  private async notifyWaitlistUsers(booking: Booking) {
-    const waitingUsers = await this.dataSource.manager.find(Waitlist, {
-      where: {
-        workspace: { id: booking.workspace.id },
-        startTime: booking.startTime,
-        endTime: booking.endTime,
-      },
-      relations: { user: true, workspace: true },
-    });
-
-    if (waitingUsers.length === 0) return;
-
-    for (const waitingUser of waitingUsers) {
-      await this.emailQueue.add(
-        'send-waitlist-notification',
-        {
-          email: waitingUser.user.email,
-          username: waitingUser.user.firstName,
-          workspaceTitle: waitingUser.workspace.title,
-          startTime: waitingUser.startTime,
-          endTime: waitingUser.endTime,
-        },
-        {
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 1000,
-          },
-        },
-      );
-    }
-
-    await this.dataSource.manager.remove(waitingUsers);
   }
 
   private async isBookingOverlap(
