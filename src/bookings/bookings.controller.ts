@@ -1,4 +1,11 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Param,
+  Post,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CreateBookingDto } from './dtos/create-booking.dto';
@@ -16,7 +23,7 @@ import {
 import { CancelBookingParamDto } from './dtos/cancel-booking-param.dto';
 import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
 import { AntiFraudLimit } from 'src/auth/decorators/anti-fraud-limit.decorator';
-import { AntiFraudGuard } from 'src/auth/guards/anti-fraud.guard';
+import { AntiFraudInterceptor } from 'src/auth/interceptors/anti-fraud.guard';
 import { Throttle } from '@nestjs/throttler';
 
 @UseGuards(JwtAuthGuard)
@@ -26,7 +33,7 @@ export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
   @Post()
-  @UseGuards(AntiFraudGuard)
+  @UseInterceptors(AntiFraudInterceptor)
   @AntiFraudLimit(3)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Create booking' })

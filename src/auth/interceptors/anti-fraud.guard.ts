@@ -1,10 +1,11 @@
 import {
-  CanActivate,
+  CallHandler,
   ExecutionContext,
   HttpException,
   HttpStatus,
   Inject,
   Injectable,
+  NestInterceptor,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ANTI_FRAUD_LIMIT_KEY } from '../decorators/anti-fraud-limit.decorator';
@@ -12,9 +13,10 @@ import { ActiveUserData } from '../interfaces/active-user-data.interface';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { AntiFraudCacheData } from '../interfaces/anti-fraud-cache-data.interface';
+import { catchError, Observable } from 'rxjs';
 
 @Injectable()
-export class AntiFraudGuard implements CanActivate {
+export class AntiFraudInterceptor implements NestInterceptor {
   readonly PENDING_BOOKING_TTL_MS: number = 600000;
 
   constructor(
@@ -22,13 +24,16 @@ export class AntiFraudGuard implements CanActivate {
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  async intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Promise<Observable<any>> {
     const limit = this.reflector.get<number>(
       ANTI_FRAUD_LIMIT_KEY,
       context.getHandler(),
     );
 
-    if (!limit) return true;
+    if (!limit) return next.handle();
 
     const user = context
       .switchToHttp()
@@ -60,6 +65,22 @@ export class AntiFraudGuard implements CanActivate {
       await this.cacheManager.del(redisKey);
     }
 
-    return true;
+    return next.handle().pipe(
+      catchError(async (err: Error) => {
+        await this.rollbackRedisCount(redisKey);
+        throw err;
+      }),
+    );
+  }
+
+  private async rollbackRedisCount(redisKey: string) {
+    const redisData = await this.cacheManager.get<AntiFraudCacheData>(redisKey);
+    const now = Date.now();
+
+    if (redisData && redisData.count > 0 && now < redisData.expiresAt) {
+      redisData.count -= 1;
+      const remainingTtl = Math.max(0, redisData.expiresAt - now);
+      await this.cacheManager.set(redisKey, redisData, remainingTtl);
+    }
   }
 }
