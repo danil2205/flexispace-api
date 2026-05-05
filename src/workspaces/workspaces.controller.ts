@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  Sse,
   UseGuards,
 } from '@nestjs/common';
 import { WorkspacesService } from './workspaces.service';
@@ -28,10 +29,16 @@ import {
 } from '@nestjs/swagger';
 import { WorkspaceType } from './enums/workspace-type.enum';
 import { GetAvailableWorkspacesDto } from './dtos/get-available-workspaces.dto';
+import { fromEvent, map, Observable } from 'rxjs';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { WorkspaceUpdatedEvent } from './events/workspace-updated.event';
 
 @Controller('workspaces')
 export class WorkspacesController {
-  constructor(private readonly workspacesService: WorkspacesService) {}
+  constructor(
+    private readonly workspacesService: WorkspacesService,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get all workspaces with optional filters' })
@@ -64,6 +71,25 @@ export class WorkspacesController {
     @Query() query: GetAvailableWorkspacesDto,
   ) {
     return this.workspacesService.findAvailableWorkspaces(query);
+  }
+
+  @Sse('live-updates')
+  @ApiOperation({ summary: 'Subscribe to live workspace updates' })
+  @ApiOkResponse({ description: 'Workspace updates' })
+  public subscribeToWorkspaceUpdates(): Observable<MessageEvent> {
+    return fromEvent(this.eventEmitter, 'workspace.updated').pipe(
+      map(
+        (payload: WorkspaceUpdatedEvent) =>
+          ({
+            data: {
+              event: payload.event,
+              workspaceId: payload.workspaceId,
+              startTime: payload.startTime,
+              endTime: payload.endTime,
+            },
+          }) as MessageEvent,
+      ),
+    );
   }
 
   @Get(':id')

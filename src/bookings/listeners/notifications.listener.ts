@@ -1,20 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { BookingCancelledEvent } from '../events/booking-cancelled.event';
-import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { DataSource } from 'typeorm';
 import { Waitlist } from '../entities/waitlist.entity';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Booking } from '../entities/booking.entity';
+import { WorkspaceUpdatedEvent } from '../../workspaces/events/workspace-updated.event';
 
 @Injectable()
 export class NotificationsListener {
   private readonly logger = new Logger(NotificationsListener.name);
 
   constructor(
-    private readonly notificationsGateway: NotificationsGateway,
     private readonly dataSource: DataSource,
+    private readonly eventEmitter: EventEmitter2,
     @InjectQueue('emails') private readonly emailQueue: Queue,
   ) {}
 
@@ -23,11 +23,13 @@ export class NotificationsListener {
     const { booking } = event;
 
     try {
-      this.notificationsGateway.server.emit('workspace_freed', {
+      const workspaceUpdatedEvent: WorkspaceUpdatedEvent = {
+        event: 'workspace_freed',
         workspaceId: booking.workspace.id,
         startTime: booking.startTime,
         endTime: booking.endTime,
-      });
+      };
+      this.eventEmitter.emit('workspace.updated', workspaceUpdatedEvent);
 
       const waitingUsers = await this.dataSource.manager.find(Waitlist, {
         where: {

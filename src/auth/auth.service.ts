@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -19,6 +20,7 @@ import {
   LOGGED_OUT_MESSAGE,
   OAUTH_LOGIN_REQUIRED,
   TOKEN_EXPIRED,
+  TWO_FACTOR_AUTH_ENABLED,
   USER_NOT_FOUND,
 } from './auth.constants';
 import { GoogleUser } from './interfaces/google-user.interface';
@@ -80,6 +82,10 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException(USER_NOT_FOUND);
+    }
+
+    if (user.twoFASecret) {
+      throw new BadRequestException(TWO_FACTOR_AUTH_ENABLED);
     }
 
     const secret = generateSecret();

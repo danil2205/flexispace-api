@@ -196,6 +196,35 @@ export class AuthController {
     return { message: '2FA turned on successfully' };
   }
 
+  @Post('2fa/turn-off')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Turn off 2FA',
+  })
+  @ApiOkResponse({
+    schema: { example: { message: '2FA turned off successfully' } },
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  public async turnOff2FA(
+    @CurrentUser('sub') userId: number,
+    @Body('tfaCode') code: string,
+  ) {
+    const isCodeValid = await this.authService.isTfaCodeValid(userId, code);
+
+    if (!isCodeValid) {
+      throw new UnauthorizedException(INVALID_2FA_CODE);
+    }
+
+    await this.usersService.update(userId, {
+      isTwoFAEnabled: false,
+      twoFASecret: undefined,
+    });
+
+    return { message: '2FA turned off successfully' };
+  }
+
   @Post('2fa/authenticate')
   @HttpCode(HttpStatus.OK)
   @Skip2FA()

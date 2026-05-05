@@ -17,10 +17,10 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PromoCode } from '../promo-codes/promo-code.entity';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { PromoCodeValidatorService } from '../promo-codes/promo-code-validator.service';
-import { NotificationsGateway } from 'src/notifications/notifications.gateway';
 import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
 import { Waitlist } from './entities/waitlist.entity';
 import { BookingCancelledEvent } from './events/booking-cancelled.event';
+import { WorkspaceUpdatedEvent } from '../workspaces/events/workspace-updated.event';
 
 @Injectable()
 export class BookingsService {
@@ -33,7 +33,6 @@ export class BookingsService {
     private readonly stripeService: StripeService,
     private readonly promoCodesService: PromoCodesService,
     private readonly promoCodeValidatorService: PromoCodeValidatorService,
-    private readonly notificationsGateway: NotificationsGateway,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
@@ -126,14 +125,17 @@ export class BookingsService {
         promoCode: appliedPromoCode ? { id: appliedPromoCode.id } : undefined,
       });
 
-      this.notificationsGateway.server.emit('workspace_locked', {
+      await queryRunner.manager.save(booking);
+      await queryRunner.commitTransaction();
+
+      const workspaceUpdatedEvent: WorkspaceUpdatedEvent = {
+        event: 'workspace_locked',
         workspaceId: booking.workspace.id,
         startTime: booking.startTime,
         endTime: booking.endTime,
-      });
+      };
+      this.eventEmitter.emit('workspace.updated', workspaceUpdatedEvent);
 
-      await queryRunner.manager.save(booking);
-      await queryRunner.commitTransaction();
       return {
         message: BOOKING_MESSAGES.CREATED_SUCCESS,
         data: {

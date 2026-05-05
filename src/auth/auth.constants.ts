@@ -6,3 +6,4 @@ export const TOKEN_EXPIRED = 'Token expired';
 export const USER_NOT_FOUND = 'User does not exist';
 export const OAUTH_LOGIN_REQUIRED = 'Please log in using your Google account';
 export const INVALID_2FA_CODE = 'Invalid 2FA code';
+export const TWO_FACTOR_AUTH_ENABLED = '2FA is already enabled';
