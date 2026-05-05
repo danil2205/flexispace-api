@@ -13,6 +13,7 @@ import { User } from '../users/user.entity';
 import { SignInUserDto } from './dtos/signin-user-dto';
 import {
   ACCESS_DENIED,
+  INVALID_2FA_CODE,
   INVALID_CREDENTIALS,
   INVALID_TOKEN,
   LOGGED_OUT_MESSAGE,
@@ -22,6 +23,8 @@ import {
 } from './auth.constants';
 import { GoogleUser } from './interfaces/google-user.interface';
 import { ActiveUserData } from './interfaces/active-user-data.interface';
+import { generateSecret, generateURI, verify } from 'otplib';
+import { toDataURL } from 'qrcode';
 
 @Injectable()
 export class AuthService {
@@ -72,6 +75,53 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
+  public async generateTfaSecret(userId: number) {
+    const user = await this.usersService.findOneById(userId);
+
+    if (!user) {
+      throw new UnauthorizedException(USER_NOT_FOUND);
+    }
+
+    const secret = generateSecret();
+    const uri = generateURI({
+      issuer: 'FlexiSpace',
+      label: user.email,
+      secret,
+    });
+
+    await this.usersService.update(user.id, {
+      twoFASecret: secret,
+    });
+
+    return { secret, uri };
+  }
+
+  public async generateQrCodeDataURL(uri: string) {
+    return toDataURL(uri);
+  }
+
+  public async isTfaCodeValid(userId: number, code: string) {
+    const user = await this.usersService.findOneById(userId);
+    const secret = user!.twoFASecret;
+
+    if (!secret) return false;
+
+    const isValid = await verify({ token: code, secret });
+
+    return isValid.valid;
+  }
+
+  public async tfaAuthenticate(userId: number, code: string) {
+    const user = await this.usersService.findOneById(userId);
+    const isCodeValid = await this.isTfaCodeValid(userId, code);
+
+    if (!isCodeValid) {
+      throw new UnauthorizedException(INVALID_2FA_CODE);
+    }
+
+    return this.generateTokens(user!, true);
+  }
+
   public async signToken<T>(userId: number, payload?: T) {
     return this.jwtService.signAsync(
       {
@@ -91,18 +141,31 @@ export class AuthService {
     );
   }
 
-  public async generateTokens(user: User) {
-    const [accessToken, refreshToken] = await Promise.all([
-      this.signToken<Partial<ActiveUserData>>(user.id, {
-        email: user.email,
-        role: user.role,
-      }),
-      this.signToken(user.id),
-    ]);
+  public async generateTokens(user: User, is2FAuthenticated = false) {
+    const isCompleteLogin = !user.isTwoFAEnabled || is2FAuthenticated;
 
+    const payload: Partial<ActiveUserData> = {
+      email: user.email,
+      role: user.role,
+      isTwoFAuthenticated: isCompleteLogin,
+    };
+
+    const accessToken = await this.signToken<Partial<ActiveUserData>>(
+      user.id,
+      payload,
+    );
+
+    if (!isCompleteLogin) {
+      return {
+        accessToken,
+        requires2FA: true,
+      };
+    }
+
+    const refreshToken = await this.signToken(user.id);
     await this.usersService.updateRefreshToken(user.id, refreshToken);
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, requires2FA: false };
   }
 
   public async refreshTokens(refreshToken: string) {
@@ -136,6 +199,6 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_TOKEN);
     }
 
-    return await this.generateTokens(user);
+    return await this.generateTokens(user, true);
   }
 }

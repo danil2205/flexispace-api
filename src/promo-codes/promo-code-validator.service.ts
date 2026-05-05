@@ -43,7 +43,7 @@ export class PromoCodeValidatorService {
 
     if (conditions.minPrice && totalPrice < conditions.minPrice) {
       throw new BadRequestException(
-        `${PC_CONDITION_ERRORS.MIN_PRICE} ${conditions.minPrice / 100} PLN`,
+        `${PC_CONDITION_ERRORS.MIN_PRICE} ${conditions.minPrice} UAH`,
       );
     }
 

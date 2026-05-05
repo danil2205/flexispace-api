@@ -7,6 +7,7 @@ import {
   Inject,
   Post,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -29,6 +30,7 @@ import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { Response } from 'express';
 import { ConfigType } from '@nestjs/config';
 import appConfig from '../config/app.config';
+import { INVALID_2FA_CODE } from './auth.constants';
 
 @Controller('auth')
 export class AuthController {
@@ -138,5 +140,71 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Invalid refresh token' })
   public refreshTokens(@Body() { refreshToken }: RefreshTokenDto) {
     return this.authService.refreshTokens(refreshToken);
+  }
+
+  @Post('2fa/generate')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Generate a QR code for 2FA',
+  })
+  @ApiOkResponse({
+    schema: {
+      example: {
+        qrCodeDataUrl: 'data:image/png;base64,...',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  public async generate2FA(@CurrentUser('sub') userId: number) {
+    const { uri } = await this.authService.generateTfaSecret(userId);
+    return this.authService.generateQrCodeDataURL(uri);
+  }
+
+  @Post('2fa/turn-on')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Turn on 2FA',
+  })
+  @ApiOkResponse({
+    schema: { example: { message: '2FA turned on successfully' } },
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  public async turnOn2FA(
+    @CurrentUser('sub') userId: number,
+    @Body('tfaCode') code: string,
+  ) {
+    const isCodeValid = await this.authService.isTfaCodeValid(userId, code);
+
+    if (!isCodeValid) {
+      throw new UnauthorizedException(INVALID_2FA_CODE);
+    }
+
+    await this.usersService.update(userId, {
+      isTwoFAEnabled: true,
+    });
+
+    return { message: '2FA turned on successfully' };
+  }
+
+  @Post('2fa/authenticate')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Authenticate with 2FA',
+  })
+  @ApiOkResponse({
+    schema: { example: { message: '2FA authenticated successfully' } },
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  public async authenticate2FA(
+    @CurrentUser('sub') userId: number,
+    @Body('tfaCode') code: string,
+  ) {
+    return this.authService.tfaAuthenticate(userId, code);
   }
 }

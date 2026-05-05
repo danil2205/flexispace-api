@@ -12,12 +12,13 @@ import {
   ApiOperation,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { StrictJwtAuthGuard } from 'src/auth/guards/strict-jwt-auth.guard';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(StrictJwtAuthGuard)
   @Get('me')
   @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Get current user profile' })

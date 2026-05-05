@@ -47,6 +47,13 @@ export class User {
   @Column({ nullable: true, unique: true })
   googleId?: string;
 
+  @Column({ nullable: true })
+  @Exclude()
+  twoFASecret?: string;
+
+  @Column({ default: false })
+  isTwoFAEnabled: boolean;
+
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;
 

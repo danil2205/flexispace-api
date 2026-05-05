@@ -32,7 +32,14 @@ export class UsersService {
     try {
       user = await this.usersRepository.findOne({
         where: { email },
-        select: ['id', 'email', 'password', 'role', 'refreshToken'],
+        select: [
+          'id',
+          'email',
+          'password',
+          'role',
+          'refreshToken',
+          'isTwoFAEnabled',
+        ],
       });
     } catch {
       throw new RequestTimeoutException(TIMEOUT_EXCEPTION, {
@@ -49,7 +56,15 @@ export class UsersService {
     try {
       user = await this.usersRepository.findOne({
         where: { id },
-        select: ['id', 'email', 'password', 'role', 'refreshToken'],
+        select: [
+          'id',
+          'email',
+          'password',
+          'role',
+          'refreshToken',
+          'twoFASecret',
+          'isTwoFAEnabled',
+        ],
       });
     } catch {
       throw new RequestTimeoutException(TIMEOUT_EXCEPTION, {

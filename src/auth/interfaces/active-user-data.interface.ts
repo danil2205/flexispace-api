@@ -4,4 +4,5 @@ export interface ActiveUserData {
   sub: number;
   email: string;
   role: UserRole;
+  isTwoFAuthenticated: boolean;
 }
