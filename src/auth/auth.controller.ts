@@ -31,6 +31,7 @@ import { Response } from 'express';
 import { ConfigType } from '@nestjs/config';
 import appConfig from '../config/app.config';
 import { INVALID_2FA_CODE } from './auth.constants';
+import { Skip2FA } from './decorators/skip-2fa.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -78,18 +79,21 @@ export class AuthController {
   ) {
     const tokens = await this.authService.validateGoogleUser(googleUser);
     const isProduction = this.appConfiguration.environment === 'production';
-
-    res.cookie('accessToken', tokens.accessToken, {
+    const cookieOptions = {
       httpOnly: true,
       secure: isProduction,
-      sameSite: 'lax',
-    });
+      sameSite: 'lax' as const,
+    };
 
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-    });
+    res.cookie('accessToken', tokens.accessToken, cookieOptions);
+
+    if (tokens.refreshToken) {
+      res.cookie('refreshToken', tokens.refreshToken, cookieOptions);
+    }
+
+    if (tokens.requires2FA) {
+      return res.redirect('http://localhost:3500/login/2fa');
+    }
 
     return res.redirect('http://localhost:3500/login/success');
   }
@@ -143,6 +147,7 @@ export class AuthController {
   }
 
   @Post('2fa/generate')
+  @Skip2FA()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('bearer')
@@ -163,6 +168,7 @@ export class AuthController {
   }
 
   @Post('2fa/turn-on')
+  @Skip2FA()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('bearer')
@@ -192,6 +198,7 @@ export class AuthController {
 
   @Post('2fa/authenticate')
   @HttpCode(HttpStatus.OK)
+  @Skip2FA()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('bearer')
   @ApiOperation({
