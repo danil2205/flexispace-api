@@ -55,6 +55,9 @@ export class BookingsController {
   }
 
   @Post(':id/cancel')
+  @UseInterceptors(AntiFraudInterceptor)
+  @AntiFraudLimit(3)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Cancel booking' })
   @ApiParam({
     name: 'id',

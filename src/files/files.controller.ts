@@ -19,7 +19,9 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiUnauthorizedResponse,
+  ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('files')
 export class FilesController {
@@ -56,6 +58,8 @@ export class FilesController {
     description: 'Validation failed (invalid type or file too large)',
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async uploadFile(
     @UploadedFile(
       new ParseFilePipe({

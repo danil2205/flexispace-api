@@ -25,6 +25,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiUnauthorizedResponse,
+  ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { Response } from 'express';
@@ -32,6 +33,7 @@ import { ConfigType } from '@nestjs/config';
 import appConfig from '../config/app.config';
 import { INVALID_2FA_CODE } from './auth.constants';
 import { Skip2FA } from './decorators/skip-2fa.decorator';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
@@ -58,6 +60,8 @@ export class AuthController {
     },
   })
   @ApiUnauthorizedResponse({ description: 'Invalid credentials' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   public signIn(@Body() signInUserDto: SignInUserDto) {
     return this.authService.signIn(signInUserDto);
   }
@@ -103,6 +107,8 @@ export class AuthController {
   @ApiBody({ type: CreateUserDto })
   @ApiOkResponse({ description: 'User created successfully' })
   @ApiUnauthorizedResponse({ description: 'Validation or auth error' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   public createUser(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
@@ -142,6 +148,8 @@ export class AuthController {
     description: 'Refresh token expired or access denied',
   })
   @ApiUnauthorizedResponse({ description: 'Invalid refresh token' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   public refreshTokens(@Body() { refreshToken }: RefreshTokenDto) {
     return this.authService.refreshTokens(refreshToken);
   }
@@ -162,6 +170,8 @@ export class AuthController {
     },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   public async generate2FA(@CurrentUser('sub') userId: number) {
     const { uri } = await this.authService.generateTfaSecret(userId);
     return this.authService.generateQrCodeDataURL(uri);
@@ -179,6 +189,8 @@ export class AuthController {
     schema: { example: { message: '2FA turned on successfully' } },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   public async turnOn2FA(
     @CurrentUser('sub') userId: number,
     @Body('tfaCode') code: string,
@@ -207,6 +219,8 @@ export class AuthController {
     schema: { example: { message: '2FA turned off successfully' } },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   public async turnOff2FA(
     @CurrentUser('sub') userId: number,
     @Body('tfaCode') code: string,
@@ -237,6 +251,8 @@ export class AuthController {
     schema: { example: { message: '2FA authenticated successfully' } },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   public async authenticate2FA(
     @CurrentUser('sub') userId: number,
     @Body('tfaCode') code: string,
