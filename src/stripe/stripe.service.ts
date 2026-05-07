@@ -14,9 +14,7 @@ export class StripeService {
     @Inject(paymentConfig.KEY)
     paymentConfiguration: ConfigType<typeof paymentConfig>,
   ) {
-    this.stripe = new Stripe(paymentConfiguration.secretKey!, {
-      apiVersion: '2026-03-25.dahlia',
-    });
+    this.stripe = new Stripe(paymentConfiguration.secretKey!);
     this.webhookSecret = paymentConfiguration.webhookSecret!;
   }
 
