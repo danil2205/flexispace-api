@@ -6,6 +6,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { IS_2FA_SKIPPED_KEY } from '../decorators/skip-2fa.decorator';
+import { ActiveUserData } from '../interfaces/active-user-data.interface';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -13,9 +14,14 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
-  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+  handleRequest<TUser = any>(
+    err: unknown,
+    user: any,
+    info: unknown,
+    context: ExecutionContext,
+  ): TUser {
     if (err || !user) {
-      throw err || new UnauthorizedException();
+      throw err instanceof Error ? err : new UnauthorizedException();
     }
 
     const is2FaSkipped = this.reflector.getAllAndOverride<boolean>(
@@ -23,10 +29,12 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       [context.getHandler(), context.getClass()],
     );
 
-    if (!is2FaSkipped && !user.isTwoFAuthenticated) {
+    const activeUser = user as ActiveUserData;
+
+    if (!is2FaSkipped && !activeUser.isTwoFAuthenticated) {
       throw new UnauthorizedException('2FA is required');
     }
 
-    return user;
+    return user as TUser;
   }
 }
