@@ -5,7 +5,7 @@ import { PromoCode } from './promo-code.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 
-describe(' Test suite', () => {
+describe('PromoCodesService', () => {
   let service: PromoCodesService;
   let mockPromoCodeRepository: Partial<Repository<PromoCode>>;
 

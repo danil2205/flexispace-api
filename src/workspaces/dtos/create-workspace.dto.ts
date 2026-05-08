@@ -39,5 +39,5 @@ export class CreateWorkspaceDto {
   @ApiPropertyOptional({ example: 'https://example.com/image.jpg' })
   @IsString()
   @IsOptional()
-  imageUrl: string;
+  imageUrl?: string;
 }
