@@ -23,7 +23,13 @@ export class UsersService {
   ) {}
 
   async findAll(): Promise<User[]> {
-    return this.usersRepository.find();
+    try {
+      return await this.usersRepository.find();
+    } catch {
+      throw new RequestTimeoutException(TIMEOUT_EXCEPTION, {
+        description: TIMEOUT_EXCEPTION_DESCRIPTION,
+      });
+    }
   }
 
   async findOneByEmail(email: string): Promise<User | null> {

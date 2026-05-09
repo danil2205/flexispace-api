@@ -36,7 +36,7 @@ describe('PromoCodesService', () => {
 
   describe('create', () => {
     it('should throw error if promo code already exists', async () => {
-      const promoCodeExist: PromoCode = {
+      const promoCodeExists: PromoCode = {
         id: '1',
         code: 'Test',
       } as PromoCode;
@@ -49,7 +49,7 @@ describe('PromoCodesService', () => {
       };
 
       (mockPromoCodeRepository.findOne as jest.Mock).mockResolvedValue(
-        promoCodeExist,
+        promoCodeExists,
       );
 
       await expect(service.create(promoCodeToCreate)).rejects.toThrow(
