@@ -1,6 +1,6 @@
 export const BOOKING_ERRORS = {
   INVALID_DATE_RANGE: 'Start date must be before end date',
-  PAST_BOOKING: "Can't create booking in the past",
+  PAST_BOOKING: 'Start time cannot be in the past',
   WORKSPACE_NOT_FOUND: 'Workspace not found',
   WORKSPACE_OCCUPIED: 'Workspace is already booked',
   NOT_FOUND: 'Booking not found',

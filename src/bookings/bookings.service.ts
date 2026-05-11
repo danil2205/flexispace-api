@@ -234,11 +234,11 @@ export class BookingsService {
     const endTime = new Date(createWaitlistDto.endTime);
 
     if (startTime >= endTime) {
-      throw new BadRequestException('Start time must be before end time');
+      throw new BadRequestException(BOOKING_ERRORS.INVALID_DATE_RANGE);
     }
 
     if (startTime < new Date()) {
-      throw new BadRequestException('Start time cannot be in the past');
+      throw new BadRequestException(BOOKING_ERRORS.PAST_BOOKING);
     }
 
     const workspace = await this.dataSource.manager.findOne(Workspace, {
