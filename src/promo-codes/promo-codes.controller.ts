@@ -39,6 +39,7 @@ export class PromoCodesController {
   @Post()
   @ApiOperation({ summary: 'Create a new promo code (admin only)' })
   @ApiCreatedResponse({ description: 'Promo code created successfully' })
+  @ApiBadRequestResponse({ description: 'Invalid promo code data' })
   @ApiConflictResponse({ description: 'Promo code already exists' })
   async create(@Body() dto: CreatePromoCodeDto) {
     return this.promoCodesService.create(dto);
