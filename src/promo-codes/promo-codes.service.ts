@@ -8,6 +8,7 @@ import { PromoCode } from './promo-code.entity';
 import { EntityManager, Repository } from 'typeorm';
 import { CreatePromoCodeDto } from './dtos/create-promo-code.dto';
 import { PatchPromoCodeDto } from './dtos/patch-promo-code.dto';
+import { PC_ERRORS } from './promo-code.constants';
 
 @Injectable()
 export class PromoCodesService {
@@ -22,7 +23,7 @@ export class PromoCodesService {
     });
 
     if (exists) {
-      throw new ConflictException('Promo code already exists');
+      throw new ConflictException(PC_ERRORS.ALREADY_EXISTS);
     }
 
     const promoCode = this.promoCodeRepository.create({
@@ -40,7 +41,7 @@ export class PromoCodesService {
   async update(id: string, dto: PatchPromoCodeDto) {
     const promoCode = await this.promoCodeRepository.findOne({ where: { id } });
     if (!promoCode) {
-      throw new BadRequestException('Promo code not found');
+      throw new BadRequestException(PC_ERRORS.NOT_FOUND);
     }
 
     promoCode.code = dto.code?.toUpperCase() ?? promoCode.code;

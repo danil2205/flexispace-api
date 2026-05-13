@@ -46,7 +46,7 @@ describe('PromoCodeValidatorService', () => {
           startTime,
           mockManager as EntityManager,
         ),
-      ).rejects.toThrow(new BadRequestException(PC_ERRORS.INVALID));
+      ).rejects.toThrow(new BadRequestException(PC_ERRORS.NOT_FOUND));
     });
 
     it('should throw error if promo code is not active', async () => {

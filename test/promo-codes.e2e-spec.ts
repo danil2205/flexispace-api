@@ -1,41 +1,29 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  BadRequestException,
-  ConflictException,
-  INestApplication,
-  ValidationPipe,
-} from '@nestjs/common';
+import { HttpStatus, INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import type { Server } from 'http';
-import { PromoCodesService } from '../src/promo-codes/promo-codes.service';
-import { JwtAuthGuard } from '../src/auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../src/auth/guards/roles.guard';
-import { PromoCodesController } from '../src/promo-codes/promo-codes.controller';
+import { AppModule } from '../src/app.module';
+import { DataSource, Repository } from 'typeorm';
+import { PromoCode } from '../src/promo-codes/promo-code.entity';
+import { JwtService } from '@nestjs/jwt';
+import { UserRole } from '../src/users/enums/user-role.enum';
+import { PC_ERRORS } from '../src/promo-codes/promo-code.constants';
+import { CreatePromoCodeDto } from '../src/promo-codes/dtos/create-promo-code.dto';
 
 describe('PromoCodesController (e2e)', () => {
   let app: INestApplication;
+  let dataSource: DataSource;
+  let promoCodeRepo: Repository<PromoCode>;
+  let jwtService: JwtService;
 
-  const mockPromoCodesService = {
-    create: jest.fn(),
-    findAll: jest.fn(),
-    update: jest.fn(),
-  };
+  let userToken: string;
+  let adminToken: string;
+  let savedPromoCodes: PromoCode[];
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      controllers: [PromoCodesController],
-      providers: [
-        {
-          provide: PromoCodesService,
-          useValue: mockPromoCodesService,
-        },
-      ],
-    })
-      .overrideGuard(JwtAuthGuard)
-      .useValue({ canActivate: () => true })
-      .overrideGuard(RolesGuard)
-      .useValue({ canActivate: () => true })
-      .compile();
+      imports: [AppModule],
+    }).compile();
 
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(
@@ -45,22 +33,95 @@ describe('PromoCodesController (e2e)', () => {
       }),
     );
     await app.init();
+
+    dataSource = app.get(DataSource);
+    promoCodeRepo = dataSource.getRepository(PromoCode);
+    jwtService = app.get(JwtService);
+
+    adminToken = jwtService.sign({
+      sub: 1,
+      role: UserRole.ADMIN,
+      isTwoFAuthenticated: true,
+    });
+
+    userToken = jwtService.sign({
+      sub: 2,
+      role: UserRole.USER,
+      isTwoFAuthenticated: true,
+    });
   });
 
   afterAll(async () => {
+    await promoCodeRepo.query('TRUNCATE TABLE "PromoCodes" CASCADE');
     await app.close();
   });
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  describe('/promocodes (GET)', () => {
+    beforeAll(async () => {
+      savedPromoCodes = await promoCodeRepo.save([
+        {
+          code: 'PROMO',
+          maxUses: 10,
+          discountPercentage: 10,
+          expiresAt: new Date(Date.now() + 86400000),
+        },
+        {
+          code: 'PROMO2',
+          maxUses: 10,
+          discountPercentage: 20,
+          expiresAt: new Date(Date.now() + 86400000),
+        },
+      ]);
+    });
+
+    it('should return all promo codes', async () => {
+      const response = await request(app.getHttpServer() as Server)
+        .get('/promocodes')
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.OK);
+
+      const body = response.body as PromoCode[];
+      expect(body).toHaveLength(savedPromoCodes.length);
+      const codes = body.map((p) => p.code);
+      expect(codes).toEqual(
+        expect.arrayContaining(savedPromoCodes.map((p) => p.code)),
+      );
+    });
   });
 
-  describe('/promocodes (POST)', () => {
+  describe('POST /promocodes', () => {
+    let createDto: CreatePromoCodeDto;
+
+    beforeAll(() => {
+      createDto = {
+        code: `PROMO${savedPromoCodes.length + 1}`,
+        maxUses: 10,
+        discountPercentage: 10,
+        expiresAt: new Date(Date.now() + 86400000),
+      };
+    });
+
+    it('should return 401 Unauthorized if no token is provided', () => {
+      return request(app.getHttpServer() as Server)
+        .post('/promocodes')
+        .send(createDto)
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should return 403 Forbidden for user', () => {
+      return request(app.getHttpServer() as Server)
+        .post('/promocodes')
+        .auth(userToken, { type: 'bearer' })
+        .send(createDto)
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
     it('should return 400 for invalid data', () => {
       return request(app.getHttpServer() as Server)
         .post('/promocodes')
+        .auth(adminToken, { type: 'bearer' })
         .send({})
-        .expect(400)
+        .expect(HttpStatus.BAD_REQUEST)
         .expect((res) => {
           const body = res.body as { message: Array<string>; error: string };
           expect(body.message).toBeInstanceOf(Array);
@@ -69,112 +130,92 @@ describe('PromoCodesController (e2e)', () => {
     });
 
     it('should return 409 for duplicate promo code', () => {
-      const dto = {
-        code: 'PROMO',
-        maxUses: 10,
-        discountPercentage: 10,
-        expiresAt: new Date(),
-      };
-
-      mockPromoCodesService.create.mockRejectedValue(
-        new ConflictException('Promo code already exists'),
-      );
-
       return request(app.getHttpServer() as Server)
         .post('/promocodes')
-        .send(dto)
-        .expect(409)
+        .auth(adminToken, { type: 'bearer' })
+        .send({ ...createDto, code: 'PROMO' })
+        .expect(HttpStatus.CONFLICT)
         .expect((res) => {
           const body = res.body as { message: string; error: string };
-          expect(body.message).toBe('Promo code already exists');
+          expect(body.message).toBe(PC_ERRORS.ALREADY_EXISTS);
           expect(body.error).toBe('Conflict');
         });
     });
 
-    it('should create a new promo code', () => {
-      const dto = {
-        code: 'PROMO',
-        maxUses: 10,
-        discountPercentage: 10,
-        expiresAt: new Date(),
-      };
-
-      const createdPromo = {
-        ...dto,
-        expiresAt: dto.expiresAt.toISOString(),
-        id: '1',
-      };
-
-      mockPromoCodesService.create.mockResolvedValue(createdPromo);
-
-      return request(app.getHttpServer() as Server)
+    it('should create a new promo code', async () => {
+      const response = await request(app.getHttpServer() as Server)
         .post('/promocodes')
-        .send(dto)
-        .expect(201)
-        .expect((res) => {
-          expect(res.body).toEqual(createdPromo);
-          expect(mockPromoCodesService.create).toHaveBeenCalledWith(
-            expect.objectContaining({
-              code: dto.code,
-              maxUses: dto.maxUses,
-              discountPercentage: dto.discountPercentage,
-              expiresAt: dto.expiresAt,
-            }),
-          );
-        });
-    });
-  });
+        .auth(adminToken, { type: 'bearer' })
+        .send(createDto)
+        .expect(HttpStatus.CREATED);
 
-  describe('/promocodes (GET)', () => {
-    it('should return all promo codes', () => {
-      const mockPromoList = [
-        { id: '1', code: 'PROMO1' },
-        { id: '2', code: 'PROMO2' },
-      ];
+      const body = response.body as PromoCode;
+      expect(body).toEqual(
+        expect.objectContaining({
+          code: createDto.code,
+          maxUses: createDto.maxUses,
+          discountPercentage: createDto.discountPercentage,
+          expiresAt: createDto.expiresAt?.toISOString(),
+        }),
+      );
 
-      mockPromoCodesService.findAll.mockResolvedValue(mockPromoList);
+      const savedPromo = await promoCodeRepo.findOne({
+        where: { id: body.id },
+      });
 
-      return request(app.getHttpServer() as Server)
-        .get('/promocodes')
-        .expect(200)
-        .expect((res) => {
-          expect(res.body).toEqual(mockPromoList);
-          expect(mockPromoCodesService.findAll).toHaveBeenCalled();
-        });
+      expect(savedPromo).toBeDefined();
+      expect(savedPromo!.discountPercentage).toBe(createDto.discountPercentage);
+      expect(savedPromo!.isActive).toBe(true);
     });
   });
 
   describe('/promocodes/:id (PATCH)', () => {
-    const promoId = 'uuid';
+    let promoId: string;
 
-    it('should return 400 when updating non-existent promo code', () => {
-      mockPromoCodesService.update.mockRejectedValue(
-        new BadRequestException('Promo code not found'),
-      );
-
-      return request(app.getHttpServer() as Server)
-        .patch(`/promocodes/${promoId}`)
-        .send({ discountPercentage: 42 })
-        .expect(400);
+    beforeAll(() => {
+      promoId = savedPromoCodes[0].id;
     });
 
-    it('should return 200 and update promo code', () => {
-      const dto = { isActive: false };
-      const updated = { id: promoId, code: 'TEST', isActive: false };
-
-      mockPromoCodesService.update.mockResolvedValue(updated);
-
+    it('should return 400 when updating non-existent promo code', () => {
+      const nonExistentId = '11111111-1111-1111-1111-111111111111';
       return request(app.getHttpServer() as Server)
-        .patch(`/promocodes/${promoId}`)
-        .send(dto)
-        .expect(200)
+        .patch(`/promocodes/${nonExistentId}`)
+        .auth(adminToken, { type: 'bearer' })
+        .send({ discountPercentage: 42 })
+        .expect(HttpStatus.BAD_REQUEST)
         .expect((res) => {
-          expect(res.body).toEqual(updated);
-          expect(mockPromoCodesService.update).toHaveBeenCalledWith(
-            promoId,
-            dto,
-          );
+          const body = res.body as { message: string; error: string };
+          expect(body.message).toBe(PC_ERRORS.NOT_FOUND);
+          expect(body.error).toBe('Bad Request');
         });
+    });
+
+    it('should return 200 and update promo code', async () => {
+      const dto = {
+        isActive: false,
+        discountPercentage: 42,
+        conditions: { onlyWeekends: true },
+      };
+
+      const response = await request(app.getHttpServer() as Server)
+        .patch(`/promocodes/${promoId}`)
+        .auth(adminToken, { type: 'bearer' })
+        .send(dto)
+        .expect(HttpStatus.OK);
+
+      const body = response.body as PromoCode;
+      expect(body.isActive).toBe(dto.isActive);
+      expect(body.discountPercentage).toBe(dto.discountPercentage);
+      expect(body.conditions).toEqual(dto.conditions);
+
+      const updatedPromo = await promoCodeRepo.findOne({
+        where: { id: promoId },
+      });
+
+      expect(updatedPromo).toBeDefined();
+      expect(updatedPromo!.isActive).toBe(dto.isActive);
+      expect(updatedPromo!.discountPercentage).toBe(dto.discountPercentage);
+      expect(updatedPromo!.conditions).toEqual(dto.conditions);
     });
   });
 });

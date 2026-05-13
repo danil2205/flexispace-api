@@ -1,8 +1,9 @@
 export const PC_ERRORS = {
-  INVALID: 'Promo code not found',
+  NOT_FOUND: 'Promo code not found',
   INACTIVE: 'Promo code is not active',
   EXPIRED: 'Promo code has expired',
   LIMIT_REACHED: 'Promo code has reached its limit',
+  ALREADY_EXISTS: 'Promo code already exists',
 } as const;
 
 export const PC_CONDITION_ERRORS = {

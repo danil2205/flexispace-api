@@ -21,7 +21,7 @@ export class PromoCodeValidatorService {
     });
 
     if (!promoCode) {
-      throw new BadRequestException(PC_ERRORS.INVALID);
+      throw new BadRequestException(PC_ERRORS.NOT_FOUND);
     }
 
     if (!promoCode.isActive) {
