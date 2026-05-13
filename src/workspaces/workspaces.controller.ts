@@ -19,6 +19,7 @@ import { GetWorkspacesFilterDto } from './dtos/get-workspaces-filter.dto';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiBody,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiOkResponse,
@@ -106,6 +107,7 @@ export class WorkspacesController {
   @Post()
   @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Create workspace' })
+  @ApiBody({ type: CreateWorkspaceDto })
   @ApiCreatedResponse({ description: 'Workspace created successfully' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({
