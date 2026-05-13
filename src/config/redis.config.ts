@@ -4,4 +4,5 @@ export default registerAs('redis', () => ({
   host: process.env.REDIS_HOST || 'localhost',
   port: parseInt(process.env.REDIS_PORT || '6379', 10),
   ttl: parseInt(process.env.REDIS_TTL || '60000', 10),
+  db: parseInt(process.env.REDIS_DB || '0', 10),
 }));

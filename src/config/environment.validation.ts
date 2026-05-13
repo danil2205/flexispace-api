@@ -28,6 +28,7 @@ export default Joi.object({
   REDIS_HOST: Joi.string().required(),
   REDIS_PORT: Joi.number().port().required(),
   REDIS_TTL: Joi.number().required(),
+  REDIS_DB: Joi.number().default(0),
 
   STRIPE_SECRET_KEY: Joi.string().required(),
   STRIPE_WEBHOOK_SECRET: Joi.string().required(),

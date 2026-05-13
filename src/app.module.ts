@@ -57,7 +57,7 @@ const ENV = process.env.NODE_ENV;
       useFactory: (configService: ConfigService) => ({
         stores: [
           createKeyv(
-            `redis://${configService.get('redis.host')}:${configService.get('redis.port')}`,
+            `redis://${configService.get('redis.host')}:${configService.get('redis.port')}/${configService.get('redis.db')}`,
           ),
         ],
         ttl: configService.get('redis.ttl'),
@@ -70,6 +70,7 @@ const ENV = process.env.NODE_ENV;
         connection: {
           host: configService.get<string>('redis.host'),
           port: configService.get<number>('redis.port'),
+          db: configService.get<number>('redis.db'),
         },
       }),
     }),

@@ -13,8 +13,8 @@ import {
   INVALID_DATE_RANGE_ERROR,
   PAST_TIME_ERROR,
 } from '../src/workspaces/workspaces.constants';
-import Response from 'superagent/lib/node/response';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventSource } from 'eventsource';
 
 describe('WorkspacesController (e2e)', () => {
   let app: INestApplication;
@@ -23,9 +23,14 @@ describe('WorkspacesController (e2e)', () => {
   let bookingRepo: Repository<Booking>;
   let jwtService: JwtService;
   let eventEmitter: EventEmitter2;
+  let url: string;
 
   let adminToken: string;
   let userToken: string;
+  let savedWorkspaces: Workspace[];
+
+  const ONE_HOUR_MS = 3600000;
+  const TWO_HOUR_MS = 7200000;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -40,6 +45,9 @@ describe('WorkspacesController (e2e)', () => {
       }),
     );
     await app.init();
+
+    await app.listen(0);
+    url = await app.getUrl();
 
     dataSource = app.get(DataSource);
     workspaceRepo = dataSource.getRepository(Workspace);
@@ -61,14 +69,14 @@ describe('WorkspacesController (e2e)', () => {
   });
 
   afterAll(async () => {
-    await bookingRepo.query('TRUNCATE TABLE bookings CASCADE');
-    await workspaceRepo.query('TRUNCATE TABLE workspaces CASCADE');
+    await bookingRepo.query('TRUNCATE TABLE "Bookings" CASCADE');
+    await workspaceRepo.query('TRUNCATE TABLE "Workspaces" CASCADE');
     await app.close();
   });
 
   describe('GET /workspaces', () => {
     beforeAll(async () => {
-      await workspaceRepo.save([
+      savedWorkspaces = await workspaceRepo.save([
         {
           title: 'Cheap Room',
           pricePerHour: 100,
@@ -108,7 +116,10 @@ describe('WorkspacesController (e2e)', () => {
         .query({ minPrice: 200, type: WorkspaceType.OPEN_SPACE })
         .expect(HttpStatus.OK);
 
-      const body = response.body as { data: Array<Workspace>; total: number };
+      const body = response.body as {
+        data: Array<Workspace>;
+        meta: Record<string, number>;
+      };
       expect(body.data).toHaveLength(1);
 
       expect(body.data[0]).toEqual(
@@ -119,7 +130,7 @@ describe('WorkspacesController (e2e)', () => {
           type: WorkspaceType.OPEN_SPACE,
         }),
       );
-      expect(body.total).toBe(1);
+      expect(body.meta.totalItems).toBe(1);
     });
 
     it('should paginate query results', async () => {
@@ -128,9 +139,12 @@ describe('WorkspacesController (e2e)', () => {
         .query({ limit: 2, page: 2 })
         .expect(HttpStatus.OK);
 
-      const body = response.body as { data: Array<Workspace>; total: number };
+      const body = response.body as {
+        data: Array<Workspace>;
+        meta: Record<string, number>;
+      };
       expect(body.data).toHaveLength(1);
-      expect(body.total).toBe(3);
+      expect(body.meta.totalItems).toBe(3);
     });
   });
 
@@ -155,14 +169,14 @@ describe('WorkspacesController (e2e)', () => {
     });
 
     it('should return workspace with given id', async () => {
+      const cheapRoom = savedWorkspaces[0];
       const response = await request(app.getHttpServer() as Server)
-        .get('/workspaces/1')
+        .get(`/workspaces/${cheapRoom.id}`)
         .expect(HttpStatus.OK);
 
-      const body = response.body as { data: Workspace };
-      expect(body.data).toEqual(
+      expect(response.body).toEqual(
         expect.objectContaining({
-          id: 1,
+          id: cheapRoom.id,
           title: 'Cheap Room',
           pricePerHour: 100,
           capacity: 2,
@@ -178,8 +192,7 @@ describe('WorkspacesController (e2e)', () => {
 
     beforeAll(async () => {
       await bookingRepo.save({
-        userId: 1,
-        workspaceId: 1,
+        workspace: { id: savedWorkspaces[0].id },
         startTime: testStartTime,
         endTime: testEndTime,
         price: 100,
@@ -191,8 +204,8 @@ describe('WorkspacesController (e2e)', () => {
       return request(app.getHttpServer() as Server)
         .get('/workspaces/available')
         .query({
-          startTime: now.toISOString(),
-          endTime: new Date(now.getTime() - 10000).toISOString(),
+          startTime: now,
+          endTime: new Date(now.getTime() - 10000),
         })
         .expect(HttpStatus.BAD_REQUEST)
         .expect((res) => {
@@ -206,8 +219,8 @@ describe('WorkspacesController (e2e)', () => {
       return request(app.getHttpServer() as Server)
         .get('/workspaces/available')
         .query({
-          startTime: new Date(now.getTime() - 10000).toISOString(),
-          endTime: now.toISOString(),
+          startTime: new Date(now.getTime() - 10000),
+          endTime: now,
         })
         .expect(HttpStatus.BAD_REQUEST)
         .expect((res) => {
@@ -234,8 +247,8 @@ describe('WorkspacesController (e2e)', () => {
       const response = await request(app.getHttpServer() as Server)
         .get('/workspaces/available')
         .query({
-          startTime: testStartTime.toISOString(),
-          endTime: testEndTime.toISOString(),
+          startTime: testStartTime,
+          endTime: testEndTime,
         })
         .expect(HttpStatus.OK);
 
@@ -248,8 +261,8 @@ describe('WorkspacesController (e2e)', () => {
       const response = await request(app.getHttpServer() as Server)
         .get('/workspaces/available')
         .query({
-          startTime: now.toISOString(),
-          endTime: new Date(now.getTime() + 10000).toISOString(),
+          startTime: new Date(now.getTime() + ONE_HOUR_MS),
+          endTime: new Date(now.getTime() + TWO_HOUR_MS),
         })
         .expect(HttpStatus.OK);
 
@@ -305,8 +318,8 @@ describe('WorkspacesController (e2e)', () => {
         .send(workspaceDto)
         .expect(HttpStatus.CREATED);
 
-      const body = response.body as { data: Workspace };
-      expect(body.data).toEqual(
+      const body = response.body as Workspace;
+      expect(body).toEqual(
         expect.objectContaining({
           title: 'New Workspace',
           pricePerHour: 100,
@@ -316,7 +329,7 @@ describe('WorkspacesController (e2e)', () => {
       );
 
       const savedWorkspace = await workspaceRepo.findOne({
-        where: { id: body.data.id },
+        where: { id: body.id },
       });
       expect(savedWorkspace).toBeDefined();
       expect(savedWorkspace!.capacity).toBe(10);
@@ -324,7 +337,7 @@ describe('WorkspacesController (e2e)', () => {
   });
 
   describe('SSE /workspaces/live-updates', () => {
-    it('should return event stream', (done) => {
+    it('should return event stream', async () => {
       const mockEventPayload = {
         event: 'workspace_locked',
         workspaceId: 99,
@@ -332,47 +345,37 @@ describe('WorkspacesController (e2e)', () => {
         endTime: new Date(),
       };
 
-      let resolved = false;
+      const eventPromise = new Promise((resolve, reject) => {
+        const es = new EventSource(`${url}/workspaces/live-updates`);
 
-      const req = request(app.getHttpServer() as Server).get(
-        '/workspaces/live-updates',
-      );
+        es.onmessage = (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data as string) as {
+              workspaceId: number;
+              event: string;
+            };
+            expect(data.workspaceId).toBe(mockEventPayload.workspaceId);
+            expect(data.event).toBe(mockEventPayload.event);
 
-      req
-        .expect(HttpStatus.OK)
-        .expect('Content-Type', 'text/event-stream')
-        .buffer(false)
-        .parse((res: Response) => {
-          res.on('data', (chunk: Buffer) => {
-            const message = chunk.toString();
+            es.close();
+            resolve(true);
+          } catch (error) {
+            es.close();
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
+        };
 
-            if (message.includes(mockEventPayload.event)) {
-              try {
-                expect(message).toContain(
-                  `"workspaceId":${mockEventPayload.workspaceId}`,
-                );
-                expect(message).toContain(
-                  `"event":"${mockEventPayload.event}"`,
-                );
-
-                resolved = true;
-                req.abort();
-                done();
-              } catch (error) {
-                resolved = true;
-                req.abort();
-                done(error);
-              }
-            }
-          });
-        })
-        .end((err) => {
-          if (!resolved && err) done(err);
-        });
+        es.onerror = () => {
+          es.close();
+          reject(new Error('EventSource connection failed'));
+        };
+      });
 
       setTimeout(() => {
         eventEmitter.emit('workspace.updated', mockEventPayload);
       }, 100);
+
+      await eventPromise;
     });
   });
 });
