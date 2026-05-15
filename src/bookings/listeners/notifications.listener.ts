@@ -76,7 +76,7 @@ export class NotificationsListener {
       await this.emailQueue.add(
         'send-receipt',
         {
-          userName: booking.user.firstName,
+          username: booking.user.firstName,
           email: booking.user.email,
           workspaceTitle: booking.workspace.title,
           startTime: booking.startTime,

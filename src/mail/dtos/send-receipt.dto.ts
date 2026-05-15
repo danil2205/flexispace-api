@@ -13,7 +13,7 @@ export class SendReceiptDto {
   email: string;
 
   @IsString()
-  userName: string;
+  username: string;
 
   @IsString()
   workspaceTitle: string;

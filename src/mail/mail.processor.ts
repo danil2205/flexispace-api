@@ -57,7 +57,7 @@ export class MailProcessor extends WorkerHost {
       endTime,
       workspaceTitle,
       email,
-      userName,
+      username,
     } = data;
 
     const formattedPrice = new Intl.NumberFormat('uk-UA', {
@@ -80,7 +80,7 @@ export class MailProcessor extends WorkerHost {
         subject: `Booking confirmed: ${workspaceTitle}`,
         template: './receipt',
         context: {
-          userName,
+          username,
           workspaceTitle,
           startDate: startTime.toLocaleString('uk-UA'),
           endDate: endTime.toLocaleString('uk-UA'),
