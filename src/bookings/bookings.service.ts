@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { Booking } from './entities/booking.entity';
 import { DataSource, EntityManager, Raw } from 'typeorm';
@@ -186,7 +187,7 @@ export class BookingsService {
     });
 
     if (!booking) {
-      throw new BadRequestException(BOOKING_ERRORS.NOT_FOUND);
+      throw new NotFoundException(BOOKING_ERRORS.NOT_FOUND);
     }
 
     if (booking.status === BookingStatus.CANCELLED) {

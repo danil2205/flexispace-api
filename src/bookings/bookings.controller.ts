@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   UseGuards,
@@ -14,6 +16,7 @@ import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -55,6 +58,7 @@ export class BookingsController {
   }
 
   @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
   @UseInterceptors(AntiFraudInterceptor)
   @AntiFraudLimit(3)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -67,6 +71,11 @@ export class BookingsController {
     example: '6187b9c9-47f5-43a5-b314-f074082a9ce1',
   })
   @ApiOkResponse({ description: 'Booking cancelled successfully' })
+  @ApiTooManyRequestsResponse({
+    description:
+      'Rate limit exceeded (only 5 request per minute allowed) or too many pending bookings.',
+  })
+  @ApiNotFoundResponse({ description: 'Booking not found' })
   @ApiBadRequestResponse({
     description: 'Booking not found or already confirmed or cancelled',
   })
