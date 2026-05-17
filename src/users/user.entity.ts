@@ -47,9 +47,9 @@ export class User {
   @Column({ nullable: true, unique: true })
   googleId?: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   @Exclude()
-  twoFASecret?: string;
+  twoFASecret?: string | null;
 
   @Column({ default: false })
   isTwoFAEnabled: boolean;

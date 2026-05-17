@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { User } from './user.entity';
 import { CreateUserDto } from './dtos/create-user.dto';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import {
   USER_ALREADY_EXISTS,
   TIMEOUT_EXCEPTION,
@@ -139,7 +140,11 @@ export class UsersService {
   async updateRefreshToken(userId: number, refreshToken: string | null) {
     if (refreshToken) {
       const salt = await bcrypt.genSalt(10);
-      const hashedToken = await bcrypt.hash(refreshToken, salt);
+      const tokenHash = crypto
+        .createHash('sha256')
+        .update(refreshToken)
+        .digest('base64');
+      const hashedToken = await bcrypt.hash(tokenHash, salt);
       await this.usersRepository.update(userId, { refreshToken: hashedToken });
     } else {
       await this.usersRepository.update(userId, { refreshToken: null });

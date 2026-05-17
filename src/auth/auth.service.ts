@@ -8,6 +8,7 @@ import {
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import jwtConfig from './config/jwt.config';
 import { ConfigType } from '@nestjs/config';
 import { User } from '../users/user.entity';
@@ -196,8 +197,12 @@ export class AuthService {
       throw new ForbiddenException(ACCESS_DENIED);
     }
 
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(refreshToken)
+      .digest('base64');
     const isRefreshTokenValid = await bcrypt.compare(
-      refreshToken,
+      tokenHash,
       user.refreshToken,
     );
 

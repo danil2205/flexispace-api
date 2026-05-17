@@ -233,7 +233,7 @@ export class AuthController {
 
     await this.usersService.update(userId, {
       isTwoFAEnabled: false,
-      twoFASecret: undefined,
+      twoFASecret: null,
     });
 
     return { message: '2FA turned off successfully' };
