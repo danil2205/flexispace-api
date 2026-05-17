@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, RequestTimeoutException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { GoogleUser } from '../auth/interfaces/google-user.interface';
 
 jest.mock('bcrypt', () => ({
@@ -250,8 +251,12 @@ describe('UsersService', () => {
     it('should hash token and update if token is provided', async () => {
       await service.updateRefreshToken(1, 'refreshToken');
 
+      const expectedHash = crypto
+        .createHash('sha256')
+        .update('refreshToken')
+        .digest('base64');
       expect(bcrypt.genSalt).toHaveBeenCalledWith(10);
-      expect(bcrypt.hash).toHaveBeenCalledWith('refreshToken', 'mockSalt');
+      expect(bcrypt.hash).toHaveBeenCalledWith(expectedHash, 'mockSalt');
       expect(mockUsersRepository.update).toHaveBeenCalledWith(1, {
         refreshToken: 'mockHashedString',
       });

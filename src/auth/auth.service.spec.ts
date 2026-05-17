@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { generateSecret, generateURI, verify } from 'otplib';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
@@ -397,8 +398,12 @@ describe('AuthService', () => {
         issuer: mockJwtConfiguration.issuer,
       });
 
+      const expectedHash = crypto
+        .createHash('sha256')
+        .update(refreshToken)
+        .digest('base64');
       expect(bcrypt.compare).toHaveBeenCalledWith(
-        refreshToken,
+        expectedHash,
         mockUser.refreshToken,
       );
 
