@@ -5,7 +5,7 @@ import { StripeService } from 'src/stripe/stripe.service';
 import { PromoCodesService } from 'src/promo-codes/promo-codes.service';
 import { PromoCodeValidatorService } from 'src/promo-codes/promo-code-validator.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { BOOKING_ERRORS, BOOKING_MESSAGES } from './booking.constants';
 import { BookingStatus } from './enums/booking-status.enum';
 import { BookingCancelledEvent } from './events/booking-cancelled.event';
@@ -437,10 +437,16 @@ describe('BookingsService', () => {
         .mockRejectedValueOnce(new Error('DB error'))
         .mockResolvedValueOnce(expiredBookings[1]);
 
+      const loggerSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => {});
+
       await service.cancelExpiredBookings();
 
       expect(mockDsManagerSave).toHaveBeenCalledTimes(2);
       expect(mockEventEmitter.emit).toHaveBeenCalledTimes(1);
+
+      loggerSpy.mockRestore();
     });
   });
 });
