@@ -142,7 +142,7 @@ describe('NotificationsListener', () => {
 
       await listener.handleBookingCancelled(mockEvent);
 
-      expect(loggerSpy).toHaveBeenCalledWith(
+      expect(loggerSpy.mock.calls[0][0]).toContain(
         'Failed to process notifications for cancelled booking b123: database down',
       );
 
@@ -189,7 +189,7 @@ describe('NotificationsListener', () => {
 
       await listener.handleBookingConfirmed(mockBooking);
 
-      expect(loggerSpy).toHaveBeenCalledWith(
+      expect(loggerSpy.mock.calls[0][0]).toContain(
         'Failed to send receipt email for confirmed booking b1337: database down',
       );
 

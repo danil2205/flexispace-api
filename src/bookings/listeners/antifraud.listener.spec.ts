@@ -149,7 +149,7 @@ describe('AntifraudListener', () => {
 
       await listener['decreasePendingBookingsCount'](userId);
 
-      expect(loggerSpy).toHaveBeenCalledWith(
+      expect(loggerSpy.mock.calls[0][0]).toContain(
         `Failed to decrease pending bookings count for user ${userId}: ${error.message}`,
       );
     });

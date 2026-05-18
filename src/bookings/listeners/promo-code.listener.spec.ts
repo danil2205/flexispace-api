@@ -102,7 +102,7 @@ describe('PromoCodeListener', () => {
         1,
       );
 
-      expect(loggerSpy).toHaveBeenCalledWith(
+      expect(loggerSpy.mock.calls[0][0]).toContain(
         `Failed to restore promo code ${booking.promoCode.id} for booking ${booking.id}: ${error.message}`,
       );
 

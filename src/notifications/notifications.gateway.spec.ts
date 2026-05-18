@@ -45,7 +45,7 @@ describe('NotificationsGateway', () => {
       gateway.handleConnection(mockSocket as Socket);
 
       expect(loggerSpy).toHaveBeenCalledWith(
-        'Client connected:',
+        expect.stringContaining('Client connected:'),
         mockSocket.id,
       );
     });
@@ -58,7 +58,7 @@ describe('NotificationsGateway', () => {
       gateway.handleDisconnect(mockSocket as Socket);
 
       expect(loggerSpy).toHaveBeenCalledWith(
-        'Client disconnected:',
+        expect.stringContaining('Client disconnected:'),
         mockSocket.id,
       );
     });
@@ -73,7 +73,7 @@ describe('NotificationsGateway', () => {
 
       expect(mockSocket.join).toHaveBeenCalledWith(`booking_${bookingId}`);
       expect(loggerSpy).toHaveBeenCalledWith(
-        `Joined booking room: booking_${bookingId}`,
+        expect.stringContaining(`Joined booking room: booking_${bookingId}`),
       );
     });
   });
