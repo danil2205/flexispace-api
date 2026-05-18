@@ -1,6 +1,6 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": ".",
+  "rootDir": "..",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
@@ -10,6 +10,13 @@
     "node_modules/(?!(@scure|@otplib|@noble|otplib|uuid|ical-generator)/)"
   ],
   "moduleNameMapper": {
-    "^src/(.*)$": "<rootDir>/../src/$1"
-  }
+    "^src/(.*)$": "<rootDir>/src/$1"
+  },
+  "collectCoverageFrom": [
+    "src/**/*.{ts,js}",
+    "!src/main.{ts,js}",
+    "!src/**/*.module.{ts,js}",
+    "!src/**/*.spec.{ts,js}"
+  ],
+  "coverageDirectory": "coverage-e2e"
 }
