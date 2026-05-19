@@ -1,4 +1,19 @@
 services:
+  api:
+    container_name: flexispace-api
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.development
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+      - AWS_ENDPOINT=http://minio:9000
+    depends_on:
+      - postgres
+      - minio
+      - redis
   postgres:
     image: postgres:alpine
     container_name: flexispace-postgres
