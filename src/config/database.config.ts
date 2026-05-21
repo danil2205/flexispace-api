@@ -8,4 +8,6 @@ export default registerAs('database', () => ({
   database: process.env.DB_NAME || 'postgres',
   synchronize: process.env.DB_SYNC === 'true',
   autoLoadEntities: process.env.DB_AUTOLOAD === 'true',
+  migrationsRun: process.env.DB_MIGRATIONS_RUN === 'true',
+  migrations: [__dirname + '/../migrations/**/*{.js,.ts}'],
 }));
