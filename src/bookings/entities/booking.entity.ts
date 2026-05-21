@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -11,13 +12,16 @@ import { BookingStatus } from '../enums/booking-status.enum';
 import { PromoCode } from 'src/promo-codes/promo-code.entity';
 
 @Entity('Bookings')
+@Index(['workspace', 'startTime', 'endTime'])
 export class Booking {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @ManyToOne(() => User, { eager: true })
   user: User;
 
+  @Index()
   @ManyToOne(() => Workspace, { eager: true })
   workspace: Workspace;
 
@@ -36,9 +40,11 @@ export class Booking {
   @Column({ type: 'varchar', length: 3, default: 'UAH' })
   currency: string;
 
+  @Index()
   @ManyToOne(() => PromoCode, { nullable: true })
   promoCode: PromoCode;
 
+  @Index()
   @Column({ type: 'enum', enum: BookingStatus, default: BookingStatus.PENDING })
   status: BookingStatus;
 

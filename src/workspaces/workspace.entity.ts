@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -33,6 +34,7 @@ export class Workspace {
   })
   capacity: number;
 
+  @Index()
   @Column({ type: 'enum', enum: WorkspaceType })
   type: WorkspaceType;
 
@@ -42,6 +44,7 @@ export class Workspace {
   })
   imageUrl: string | null;
 
+  @Index()
   @CreateDateColumn()
   createdAt: Date;
 
