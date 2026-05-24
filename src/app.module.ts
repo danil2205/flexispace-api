@@ -26,6 +26,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { MailModule } from './mail/mail.module';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { HealthModule } from './health/health.module';
 
 const ENV = process.env.NODE_ENV;
 @Module({
@@ -102,6 +103,7 @@ const ENV = process.env.NODE_ENV;
     NotificationsModule,
     PromoCodesModule,
     MailModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
