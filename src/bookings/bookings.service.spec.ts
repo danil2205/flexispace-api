@@ -14,6 +14,7 @@ import {
 import { BOOKING_ERRORS, BOOKING_MESSAGES } from './booking.constants';
 import { BookingStatus } from './enums/booking-status.enum';
 import { BookingCancelledEvent } from './events/booking-cancelled.event';
+import { Booking } from './entities/booking.entity';
 
 describe('BookingsService', () => {
   let service: BookingsService;
@@ -33,6 +34,8 @@ describe('BookingsService', () => {
   const mockDsManagerCreate = jest.fn();
   const mockDsManagerFind = jest.fn();
   const mockDsManagerSoftDelete = jest.fn();
+  const mockDsManagerUpdate = jest.fn();
+  const mockDsManagerDelete = jest.fn();
 
   const userId = 1;
   const futureStart = new Date(Date.now() + 3600000);
@@ -53,6 +56,8 @@ describe('BookingsService', () => {
     mockDsManagerCreate.mockReset();
     mockDsManagerFind.mockReset();
     mockDsManagerSoftDelete.mockReset();
+    mockDsManagerUpdate.mockReset();
+    mockDsManagerDelete.mockReset();
 
     mockQueryRunner = {
       connect: jest.fn(),
@@ -75,6 +80,8 @@ describe('BookingsService', () => {
         create: mockDsManagerCreate,
         find: mockDsManagerFind,
         softDelete: mockDsManagerSoftDelete,
+        update: mockDsManagerUpdate,
+        delete: mockDsManagerDelete,
       } as unknown as EntityManager,
     };
 
@@ -190,6 +197,11 @@ describe('BookingsService', () => {
       expect(mockManagerCreate).toHaveBeenCalled();
       expect(mockManagerSave).toHaveBeenCalled();
       expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
+      expect(mockDsManagerUpdate).toHaveBeenCalledWith(
+        Booking,
+        expect.any(String),
+        { paymentSessionId: mockSession.id },
+      );
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         'workspace.updated',
         expect.objectContaining({ event: 'workspace_locked' }),
@@ -239,6 +251,49 @@ describe('BookingsService', () => {
           amount:
             mockWorkspace.pricePerHour * (100 - mockPromo.discountPercentage),
         }),
+      );
+      expect(mockDsManagerUpdate).toHaveBeenCalledWith(
+        Booking,
+        expect.any(String),
+        { paymentSessionId: mockSession.id },
+      );
+    });
+
+    it('should delete booking and revert promo code if Stripe session creation fails', async () => {
+      const mockPromo = { id: 'promo', discountPercentage: 20 };
+
+      mockManagerFindOne.mockResolvedValue(mockWorkspace);
+      (
+        mockPromoCodeValidatorService.validatePromoCode as jest.Mock
+      ).mockResolvedValue(mockPromo);
+
+      (mockStripeService.createCheckoutSession as jest.Mock).mockRejectedValue(
+        new Error('Stripe error'),
+      );
+      mockManagerCreate.mockReturnValue({
+        workspace: { id: dto.workspaceId },
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+      });
+
+      await expect(
+        service.createBooking(userId, {
+          ...dto,
+          promoCode: 'SAVE20',
+        }),
+      ).rejects.toThrow('Stripe error');
+
+      expect(mockManagerSave).toHaveBeenCalled();
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
+
+      expect(mockPromoCodesService.changeUses).toHaveBeenLastCalledWith(
+        mockDataSource.manager,
+        'promo',
+        1,
+      );
+      expect(mockDsManagerDelete).toHaveBeenCalledWith(
+        Booking,
+        expect.any(String),
       );
     });
   });
@@ -296,7 +351,7 @@ describe('BookingsService', () => {
     it('should throw error if booking not found', async () => {
       mockDsManagerFindOne.mockResolvedValue(null);
       await expect(service.cancelBooking(1, '1')).rejects.toThrow(
-        new BadRequestException(BOOKING_ERRORS.NOT_FOUND),
+        new NotFoundException(BOOKING_ERRORS.NOT_FOUND),
       );
     });
 

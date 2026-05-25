@@ -36,8 +36,10 @@ describe('BookingsController (e2e)', () => {
   beforeAll(async () => {
     mockStripeService = {
       createCheckoutSession: jest.fn().mockResolvedValue({
+        id: 'sess_123',
         url: 'https://checkout.stripe.fake/c/pay/cs_test',
       }),
+      expireSession: jest.fn().mockResolvedValue(undefined),
     };
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -236,7 +238,7 @@ describe('BookingsController (e2e)', () => {
     });
   });
 
-  describe('POST /booking/:id/cancel', () => {
+  describe('POST /bookings/:id/cancel', () => {
     let bookingToCancelId: string;
 
     beforeAll(async () => {

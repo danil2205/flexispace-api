@@ -40,21 +40,19 @@ export class BookingsService {
   async createBooking(id: number, createBookingDto: CreateBookingDto) {
     const start = new Date(createBookingDto.startTime);
     const end = new Date(createBookingDto.endTime);
+    this.validateBookingDates(start, end);
 
-    if (start >= end) {
-      throw new BadRequestException(BOOKING_ERRORS.INVALID_DATE_RANGE);
-    }
-
-    if (start < new Date()) {
-      throw new BadRequestException(BOOKING_ERRORS.PAST_BOOKING);
-    }
+    const bookingId = randomUUID();
+    let totalPrice = 0;
+    let workspace: Workspace | null = null;
+    let appliedPromoCode: PromoCode | null = null;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction('READ COMMITTED');
 
     try {
-      const workspace = await queryRunner.manager.findOne(Workspace, {
+      workspace = await queryRunner.manager.findOne(Workspace, {
         where: { id: createBookingDto.workspaceId },
         lock: { mode: 'pessimistic_write' },
       });
@@ -76,34 +74,50 @@ export class BookingsService {
 
       const durationHours =
         (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-      let totalPrice = Math.round(durationHours * workspace.pricePerHour);
+      totalPrice = Math.round(durationHours * workspace.pricePerHour);
 
-      let appliedPromoCode: PromoCode | null = null;
       if (createBookingDto.promoCode) {
-        appliedPromoCode =
-          await this.promoCodeValidatorService.validatePromoCode(
-            createBookingDto.promoCode,
-            id,
-            workspace,
-            totalPrice,
-            start,
-            queryRunner.manager,
-          );
-
-        const discountAmount = Math.round(
-          totalPrice * (appliedPromoCode.discountPercentage / 100),
-        );
-        totalPrice -= discountAmount;
-
-        await this.promoCodesService.changeUses(
+        const promoResult = await this.applyPromoCode(
           queryRunner.manager,
-          appliedPromoCode.id,
-          -1,
+          createBookingDto.promoCode,
+          id,
+          workspace,
+          totalPrice,
+          start,
         );
+        totalPrice = promoResult.totalPrice;
+        appliedPromoCode = promoResult.appliedPromoCode;
       }
 
-      const bookingId = randomUUID();
-      const session = await this.stripeService.createCheckoutSession({
+      const booking = queryRunner.manager.create(Booking, {
+        id: bookingId,
+        user: { id },
+        workspace: { id: createBookingDto.workspaceId },
+        startTime: start,
+        endTime: end,
+        price: totalPrice,
+        paymentSessionId: '',
+        promoCode: appliedPromoCode ? { id: appliedPromoCode.id } : undefined,
+      });
+
+      await queryRunner.manager.save(booking);
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    if (!workspace) {
+      throw new BadRequestException(BOOKING_ERRORS.WORKSPACE_NOT_FOUND);
+    }
+
+    let session: Awaited<
+      ReturnType<StripeService['createCheckoutSession']>
+    > | null = null;
+    try {
+      session = await this.stripeService.createCheckoutSession({
         amount: totalPrice * 100,
         currency: 'UAH',
         productName: `Booking ${workspace.title}`,
@@ -115,25 +129,15 @@ export class BookingsService {
         cancelUrl: `http://localhost:3500/payment/cancel?bookingId=${bookingId}`,
       });
 
-      const booking = queryRunner.manager.create(Booking, {
-        id: bookingId,
-        user: { id },
-        workspace: { id: createBookingDto.workspaceId },
-        startTime: start,
-        endTime: end,
-        price: totalPrice,
+      await this.dataSource.manager.update(Booking, bookingId, {
         paymentSessionId: session.id,
-        promoCode: appliedPromoCode ? { id: appliedPromoCode.id } : undefined,
       });
-
-      await queryRunner.manager.save(booking);
-      await queryRunner.commitTransaction();
 
       const workspaceUpdatedEvent: WorkspaceUpdatedEvent = {
         event: 'workspace_locked',
-        workspaceId: booking.workspace.id,
-        startTime: booking.startTime,
-        endTime: booking.endTime,
+        workspaceId: workspace.id,
+        startTime: start,
+        endTime: end,
       };
       this.eventEmitter.emit('workspace.updated', workspaceUpdatedEvent);
 
@@ -145,10 +149,8 @@ export class BookingsService {
         },
       };
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      await this.cleanupFailedBooking(bookingId, session, appliedPromoCode);
       throw error;
-    } finally {
-      await queryRunner.release();
     }
   }
 
@@ -233,14 +235,7 @@ export class BookingsService {
   public async joinWaitlist(id: number, createWaitlistDto: CreateWaitlistDto) {
     const startTime = new Date(createWaitlistDto.startTime);
     const endTime = new Date(createWaitlistDto.endTime);
-
-    if (startTime >= endTime) {
-      throw new BadRequestException(BOOKING_ERRORS.INVALID_DATE_RANGE);
-    }
-
-    if (startTime < new Date()) {
-      throw new BadRequestException(BOOKING_ERRORS.PAST_BOOKING);
-    }
+    this.validateBookingDates(startTime, endTime);
 
     const workspace = await this.dataSource.manager.findOne(Workspace, {
       where: { id: createWaitlistDto.workspaceId },
@@ -327,5 +322,60 @@ export class BookingsService {
       throw new NotFoundException(BOOKING_ERRORS.NOT_FOUND);
     }
     await this.dataSource.manager.softDelete(Booking, id);
+  }
+
+  private validateBookingDates(start: Date, end: Date): void {
+    if (start >= end) {
+      throw new BadRequestException(BOOKING_ERRORS.INVALID_DATE_RANGE);
+    }
+    if (start < new Date()) {
+      throw new BadRequestException(BOOKING_ERRORS.PAST_BOOKING);
+    }
+  }
+
+  private async applyPromoCode(
+    manager: EntityManager,
+    promoCodeStr: string,
+    userId: number,
+    workspace: Workspace,
+    totalPrice: number,
+    startTime: Date,
+  ): Promise<{ totalPrice: number; appliedPromoCode: PromoCode }> {
+    const appliedPromoCode =
+      await this.promoCodeValidatorService.validatePromoCode(
+        promoCodeStr,
+        userId,
+        workspace,
+        totalPrice,
+        startTime,
+        manager,
+      );
+
+    const discountAmount = Math.round(
+      totalPrice * (appliedPromoCode.discountPercentage / 100),
+    );
+    const finalPrice = totalPrice - discountAmount;
+
+    await this.promoCodesService.changeUses(manager, appliedPromoCode.id, -1);
+
+    return { totalPrice: finalPrice, appliedPromoCode };
+  }
+
+  private async cleanupFailedBooking(
+    bookingId: string,
+    session: { id: string } | null,
+    appliedPromoCode: PromoCode | null,
+  ): Promise<void> {
+    if (session) {
+      await this.stripeService.expireSession(session.id);
+    }
+    if (appliedPromoCode) {
+      await this.promoCodesService.changeUses(
+        this.dataSource.manager,
+        appliedPromoCode.id,
+        1,
+      );
+    }
+    await this.dataSource.manager.delete(Booking, bookingId);
   }
 }
