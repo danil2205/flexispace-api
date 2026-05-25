@@ -378,4 +378,50 @@ describe('WorkspacesController (e2e)', () => {
       await eventPromise;
     });
   });
+
+  describe('DELETE /workspaces/:id', () => {
+    it('should return 401 when not authenticated', async () => {
+      const workspaceId = savedWorkspaces[0].id;
+      return request(app.getHttpServer() as Server)
+        .delete(`/workspaces/${workspaceId}`)
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should return 403 when not authorized', async () => {
+      const workspaceId = savedWorkspaces[0].id;
+      return request(app.getHttpServer() as Server)
+        .delete(`/workspaces/${workspaceId}`)
+        .auth(userToken, { type: 'bearer' })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should return 404 when workspace does not exist', async () => {
+      return request(app.getHttpServer() as Server)
+        .delete('/workspaces/999999')
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.NOT_FOUND);
+    });
+
+    it('should soft delete workspace when authorized', async () => {
+      const workspaceId = savedWorkspaces[0].id;
+      await request(app.getHttpServer() as Server)
+        .delete(`/workspaces/${workspaceId}`)
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.OK);
+
+      const getResponse = await request(app.getHttpServer() as Server)
+        .get('/workspaces')
+        .expect(HttpStatus.OK);
+
+      const body = getResponse.body as { data: Array<Workspace> };
+      expect(body.data.find((w) => w.id === workspaceId)).toBeUndefined();
+
+      const dbWorkspace = await workspaceRepo.findOne({
+        where: { id: workspaceId },
+        withDeleted: true,
+      });
+      expect(dbWorkspace).toBeDefined();
+      expect(dbWorkspace?.deletedAt).not.toBeNull();
+    });
+  });
 });

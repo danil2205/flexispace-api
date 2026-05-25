@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, Param, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -37,5 +37,17 @@ export class UsersController {
   @ApiForbiddenResponse({ description: 'Forbidden: admin role required' })
   public getUsers() {
     return this.usersService.findAll();
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Delete user (admin only)' })
+  @ApiOkResponse({ description: 'User deleted successfully' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'Forbidden: admin role required' })
+  public deleteUser(@Param('id') id: string) {
+    return this.usersService.delete(Number(id));
   }
 }

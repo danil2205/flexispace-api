@@ -131,4 +131,41 @@ describe('UsersController (e2e)', () => {
       ]);
     });
   });
+
+  describe('DELETE /users/:id', () => {
+    it('should return 401 if no token is provided', async () => {
+      await request(app.getHttpServer() as Server)
+        .delete(`/users/${userId}`)
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should return 403 if user tries to delete user', async () => {
+      await request(app.getHttpServer() as Server)
+        .delete(`/users/${userId}`)
+        .auth(userToken, { type: 'bearer' })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should soft delete user if admin token is provided', async () => {
+      await request(app.getHttpServer() as Server)
+        .delete(`/users/${userId}`)
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.OK);
+
+      const response = await request(app.getHttpServer() as Server)
+        .get('/users')
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.OK);
+
+      const body = response.body as Array<User>;
+      expect(body.find((u) => u.id === userId)).toBeUndefined();
+
+      const dbUser = await userRepo.findOne({
+        where: { id: userId },
+        withDeleted: true,
+      });
+      expect(dbUser).not.toBeNull();
+      expect(dbUser?.deletedAt).not.toBeNull();
+    });
+  });
 });

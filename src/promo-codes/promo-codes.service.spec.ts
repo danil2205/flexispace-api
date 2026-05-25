@@ -15,6 +15,7 @@ describe('PromoCodesService', () => {
       create: jest.fn(),
       save: jest.fn(),
       find: jest.fn(),
+      softDelete: jest.fn(),
     };
 
     const module = await Test.createTestingModule({
@@ -166,6 +167,32 @@ describe('PromoCodesService', () => {
       expect(target).toBe(PromoCode);
       expect(id).toBe(promoId);
       expect(payload.remainingUses()).toEqual(`remainingUses + ${change}`);
+    });
+  });
+
+  describe('delete', () => {
+    it('should throw BadRequestException if promo code not found', async () => {
+      (mockPromoCodeRepository.findOne as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.delete('1')).rejects.toThrow(BadRequestException);
+      expect(mockPromoCodeRepository.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('should soft delete promo code successfully if found', async () => {
+      const existingPromo = { id: '1', code: 'PROMO' };
+      (mockPromoCodeRepository.findOne as jest.Mock).mockResolvedValue(
+        existingPromo,
+      );
+      (mockPromoCodeRepository.softDelete as jest.Mock).mockResolvedValue({
+        affected: 1,
+      });
+
+      await service.delete('1');
+
+      expect(mockPromoCodeRepository.findOne).toHaveBeenCalledWith({
+        where: { id: '1' },
+      });
+      expect(mockPromoCodeRepository.softDelete).toHaveBeenCalledWith('1');
     });
   });
 });

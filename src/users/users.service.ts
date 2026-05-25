@@ -137,6 +137,16 @@ export class UsersService {
     }
   }
 
+  async delete(id: number) {
+    try {
+      await this.usersRepository.softDelete(id);
+    } catch {
+      throw new RequestTimeoutException(TIMEOUT_EXCEPTION, {
+        description: TIMEOUT_EXCEPTION_DESCRIPTION,
+      });
+    }
+  }
+
   async updateRefreshToken(userId: number, refreshToken: string | null) {
     if (refreshToken) {
       const salt = await bcrypt.genSalt(10);

@@ -28,6 +28,7 @@ describe('BookingsController (e2e)', () => {
   let mockStripeService: Partial<StripeService>;
 
   let userToken: string;
+  let adminToken: string;
   let userId: number;
   let redisKey: string;
   let workspaceId: number;
@@ -83,6 +84,12 @@ describe('BookingsController (e2e)', () => {
     userToken = jwtService.sign({
       sub: userId,
       role: UserRole.USER,
+      isTwoFAuthenticated: true,
+    });
+
+    adminToken = jwtService.sign({
+      sub: 1337,
+      role: UserRole.ADMIN,
       isTwoFAuthenticated: true,
     });
 
@@ -309,6 +316,52 @@ describe('BookingsController (e2e)', () => {
         'message',
         BOOKING_MESSAGES.WAITLISTED_SUCCESS,
       );
+    });
+  });
+
+  describe('DELETE /bookings/:id', () => {
+    let bookingId: string;
+
+    beforeAll(async () => {
+      const booking = await bookingsRepo.findOne({
+        where: { user: { id: userId } },
+      });
+      bookingId = booking!.id;
+    });
+
+    it('should return 401 when not authenticated', async () => {
+      await request(app.getHttpServer() as Server)
+        .delete(`/bookings/${bookingId}`)
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should return 403 when not authorized', async () => {
+      await request(app.getHttpServer() as Server)
+        .delete(`/bookings/${bookingId}`)
+        .auth(userToken, { type: 'bearer' })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should return 404 when booking does not exist', async () => {
+      const nonExistentId = '550e8400-e29b-41d4-a716-446655440000';
+      await request(app.getHttpServer() as Server)
+        .delete(`/bookings/${nonExistentId}`)
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.NOT_FOUND);
+    });
+
+    it('should soft delete booking when authorized', async () => {
+      await request(app.getHttpServer() as Server)
+        .delete(`/bookings/${bookingId}`)
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.OK);
+
+      const dbBooking = await bookingsRepo.findOne({
+        where: { id: bookingId },
+        withDeleted: true,
+      });
+      expect(dbBooking).toBeDefined();
+      expect(dbBooking?.deletedAt).not.toBeNull();
     });
   });
 });

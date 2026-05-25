@@ -5,7 +5,12 @@ import { StripeService } from 'src/stripe/stripe.service';
 import { PromoCodesService } from 'src/promo-codes/promo-codes.service';
 import { PromoCodeValidatorService } from 'src/promo-codes/promo-code-validator.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { BadRequestException, ConflictException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { BOOKING_ERRORS, BOOKING_MESSAGES } from './booking.constants';
 import { BookingStatus } from './enums/booking-status.enum';
 import { BookingCancelledEvent } from './events/booking-cancelled.event';
@@ -27,6 +32,7 @@ describe('BookingsService', () => {
   const mockDsManagerSave = jest.fn();
   const mockDsManagerCreate = jest.fn();
   const mockDsManagerFind = jest.fn();
+  const mockDsManagerSoftDelete = jest.fn();
 
   const userId = 1;
   const futureStart = new Date(Date.now() + 3600000);
@@ -46,6 +52,7 @@ describe('BookingsService', () => {
     mockDsManagerSave.mockReset();
     mockDsManagerCreate.mockReset();
     mockDsManagerFind.mockReset();
+    mockDsManagerSoftDelete.mockReset();
 
     mockQueryRunner = {
       connect: jest.fn(),
@@ -67,6 +74,7 @@ describe('BookingsService', () => {
         save: mockDsManagerSave,
         create: mockDsManagerCreate,
         find: mockDsManagerFind,
+        softDelete: mockDsManagerSoftDelete,
       } as unknown as EntityManager,
     };
 
@@ -447,6 +455,31 @@ describe('BookingsService', () => {
       expect(mockEventEmitter.emit).toHaveBeenCalledTimes(1);
 
       loggerSpy.mockRestore();
+    });
+  });
+
+  describe('delete', () => {
+    it('should throw NotFoundException if booking not found', async () => {
+      mockDsManagerFindOne.mockResolvedValue(null);
+
+      await expect(service.delete('1')).rejects.toThrow(NotFoundException);
+      expect(mockDsManagerSoftDelete).not.toHaveBeenCalled();
+    });
+
+    it('should soft delete booking successfully if found', async () => {
+      const booking = { id: '1' };
+      mockDsManagerFindOne.mockResolvedValue(booking);
+      mockDsManagerSoftDelete.mockResolvedValue({ affected: 1 });
+
+      await service.delete('1');
+
+      expect(mockDsManagerFindOne).toHaveBeenCalledWith(expect.any(Function), {
+        where: { id: '1' },
+      });
+      expect(mockDsManagerSoftDelete).toHaveBeenCalledWith(
+        expect.any(Function),
+        '1',
+      );
     });
   });
 });

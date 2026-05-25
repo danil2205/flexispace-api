@@ -116,4 +116,9 @@ export class WorkspacesService {
     const workspace = this.workspacesRepository.create(createWorkspaceDto);
     return this.workspacesRepository.save(workspace);
   }
+
+  async delete(id: number): Promise<void> {
+    await this.findOneById(id);
+    await this.workspacesRepository.softDelete(id);
+  }
 }

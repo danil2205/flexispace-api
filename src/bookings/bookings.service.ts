@@ -318,4 +318,14 @@ export class BookingsService {
       .andWhere('booking.startTime < :end', { end })
       .getOne();
   }
+
+  public async delete(id: string): Promise<void> {
+    const booking = await this.dataSource.manager.findOne(Booking, {
+      where: { id },
+    });
+    if (!booking) {
+      throw new NotFoundException(BOOKING_ERRORS.NOT_FOUND);
+    }
+    await this.dataSource.manager.softDelete(Booking, id);
+  }
 }

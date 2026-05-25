@@ -6,6 +6,7 @@ import {
   UseGuards,
   Patch,
   Param,
+  Delete,
 } from '@nestjs/common';
 import { PromoCodesService } from './promo-codes.service';
 import { CreatePromoCodeDto } from './dtos/create-promo-code.dto';
@@ -58,5 +59,13 @@ export class PromoCodesController {
   @ApiBadRequestResponse({ description: 'Promo code not found' })
   async update(@Param('id') id: string, @Body() dto: PatchPromoCodeDto) {
     return this.promoCodesService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete promo code (admin only)' })
+  @ApiOkResponse({ description: 'Promo code deleted successfully' })
+  @ApiBadRequestResponse({ description: 'Promo code not found' })
+  async delete(@Param('id') id: string) {
+    return this.promoCodesService.delete(id);
   }
 }

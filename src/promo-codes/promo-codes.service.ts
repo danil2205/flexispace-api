@@ -70,4 +70,12 @@ export class PromoCodesService {
       remainingUses: () => `remainingUses + ${change}`,
     });
   }
+
+  async delete(id: string): Promise<void> {
+    const promoCode = await this.promoCodeRepository.findOne({ where: { id } });
+    if (!promoCode) {
+      throw new BadRequestException(PC_ERRORS.NOT_FOUND);
+    }
+    await this.promoCodeRepository.softDelete(id);
+  }
 }

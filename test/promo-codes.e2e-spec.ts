@@ -218,4 +218,55 @@ describe('PromoCodesController (e2e)', () => {
       expect(updatedPromo!.conditions).toEqual(dto.conditions);
     });
   });
+
+  describe('/promocodes/:id (DELETE)', () => {
+    let promoId: string;
+
+    beforeAll(() => {
+      promoId = savedPromoCodes[0].id;
+    });
+
+    it('should return 401 when not authenticated', async () => {
+      await request(app.getHttpServer() as Server)
+        .delete(`/promocodes/${promoId}`)
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+
+    it('should return 403 when not authorized', async () => {
+      await request(app.getHttpServer() as Server)
+        .delete(`/promocodes/${promoId}`)
+        .auth(userToken, { type: 'bearer' })
+        .expect(HttpStatus.FORBIDDEN);
+    });
+
+    it('should return 400 when promo code does not exist', async () => {
+      const nonExistentId = '11111111-1111-1111-1111-111111111111';
+      await request(app.getHttpServer() as Server)
+        .delete(`/promocodes/${nonExistentId}`)
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.BAD_REQUEST);
+    });
+
+    it('should soft delete promo code when authorized', async () => {
+      await request(app.getHttpServer() as Server)
+        .delete(`/promocodes/${promoId}`)
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.OK);
+
+      const getResponse = await request(app.getHttpServer() as Server)
+        .get('/promocodes')
+        .auth(adminToken, { type: 'bearer' })
+        .expect(HttpStatus.OK);
+
+      const body = getResponse.body as Array<PromoCode>;
+      expect(body.find((p) => p.id === promoId)).toBeUndefined();
+
+      const dbPromo = await promoCodeRepo.findOne({
+        where: { id: promoId },
+        withDeleted: true,
+      });
+      expect(dbPromo).toBeDefined();
+      expect(dbPromo?.deletedAt).not.toBeNull();
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -115,5 +116,20 @@ export class WorkspacesController {
   })
   public async create(@Body() createWorkspaceDto: CreateWorkspaceDto) {
     return this.workspacesService.create(createWorkspaceDto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Delete(':id')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Delete workspace' })
+  @ApiParam({ name: 'id', type: Number, required: true, example: 1 })
+  @ApiOkResponse({ description: 'Workspace deleted successfully' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({
+    description: 'Forbidden: admin or manager role required',
+  })
+  public async delete(@Param('id', ParseIntPipe) id: number) {
+    return this.workspacesService.delete(id);
   }
 }

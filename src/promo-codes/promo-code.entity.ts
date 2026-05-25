@@ -2,6 +2,7 @@ import {
   BeforeInsert,
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -39,6 +40,9 @@ export class PromoCode {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt?: Date | null;
 
   @BeforeInsert()
   setRemainingUses(): void {

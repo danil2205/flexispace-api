@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   HttpCode,
   HttpStatus,
   Param,
@@ -12,10 +13,14 @@ import { BookingsService } from './bookings.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CreateBookingDto } from './dtos/create-booking.dto';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../users/enums/user-role.enum';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -100,5 +105,24 @@ export class BookingsController {
     @Body() createWaitlistDto: CreateWaitlistDto,
   ) {
     return this.bookingsService.joinWaitlist(id, createWaitlistDto);
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Delete booking (admin only)' })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    required: true,
+    format: 'uuid',
+    example: '6187b9c9-47f5-43a5-b314-f074082a9ce1',
+  })
+  @ApiOkResponse({ description: 'Booking deleted successfully' })
+  @ApiNotFoundResponse({ description: 'Booking not found' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiForbiddenResponse({ description: 'Forbidden: admin role required' })
+  async deleteBooking(@Param('id') id: string) {
+    return this.bookingsService.delete(id);
   }
 }

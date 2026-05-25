@@ -34,6 +34,7 @@ describe('WorkspacesService', () => {
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
+      softDelete: jest.fn(),
     };
 
     mockPaginationProvider = {
@@ -224,6 +225,32 @@ describe('WorkspacesService', () => {
       );
       expect(mockWorkspaceRepository.save).toHaveBeenCalledWith(workspace);
       expect(result).toEqual(workspace);
+    });
+  });
+
+  describe('delete', () => {
+    it('should throw NotFoundException if workspace does not exist', async () => {
+      (mockWorkspaceRepository.findOne as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.delete(1)).rejects.toThrow(NotFoundException);
+      expect(mockWorkspaceRepository.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('should soft delete workspace', async () => {
+      const workspace = { id: 1 };
+      (mockWorkspaceRepository.findOne as jest.Mock).mockResolvedValue(
+        workspace,
+      );
+      (mockWorkspaceRepository.softDelete as jest.Mock).mockResolvedValue({
+        affected: 1,
+      });
+
+      await service.delete(1);
+
+      expect(mockWorkspaceRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 1 },
+      });
+      expect(mockWorkspaceRepository.softDelete).toHaveBeenCalledWith(1);
     });
   });
 });
