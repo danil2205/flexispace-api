@@ -10,6 +10,17 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { STATUS_CODES } from 'http';
 
+export interface ErrorResponse {
+  success: boolean;
+  status: number;
+  error: string;
+  timestamp: string;
+  path: string;
+  method: string;
+  message: string | string[];
+  errorDetails: string | null;
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
@@ -32,7 +43,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
     let error = 'Internal Server Error';
-    let errorDetails: unknown = null;
+    let errorDetails: string | null = null;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -57,12 +68,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
       if (process.env.NODE_ENV !== 'production' && exception instanceof Error) {
         message = exception.message;
-        errorDetails = exception.stack;
+        errorDetails = exception.stack ?? errorDetails;
       }
       error = STATUS_CODES[status] || 'Error';
     }
 
-    const responseBody = {
+    const responseBody: ErrorResponse = {
       success: false,
       status,
       error,
