@@ -105,7 +105,7 @@ Start the full stack (API, PostgreSQL, Redis, and MinIO):
 docker compose up -d
 ```
 
-### 6. Run Database Migrations & Seed Data
+### 6. Run Database Migrations (Optional)
 
 > **Note:** With `DB_MIGRATIONS_RUN=true` (the default in `.env.development`), migrations execute **automatically** on application startup. You only need to run this command if you want to execute migrations manually before starting the app:
 
