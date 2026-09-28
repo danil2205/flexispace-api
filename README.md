@@ -54,6 +54,10 @@ Once the application is running locally, access the interactive documentation at
 http://localhost:3000/api
 ```
 
+<p align="center">
+  <img src="assets/swagger-preview.png" alt="Swagger API Documentation" width="750" />
+</p>
+
 ---
 
 ## Local Development
