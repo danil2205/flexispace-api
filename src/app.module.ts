@@ -33,7 +33,7 @@ const ENV = process.env.NODE_ENV;
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: !ENV ? '.env' : `.env.${ENV}`,
+      envFilePath: ENV ? [`.env.${ENV}`, '.env'] : ['.env.development', '.env'],
       load: [appConfig, databaseConfig, awsConfig, redisConfig, paymentConfig],
       validationSchema: environmentValidation,
     }),
@@ -49,6 +49,8 @@ const ENV = process.env.NODE_ENV;
         password: configService.get('database.password'),
         host: configService.get('database.host'),
         database: configService.get('database.database'),
+        migrationsRun: configService.get<boolean>('database.migrationsRun'),
+        migrations: configService.get<string[]>('database.migrations'),
       }),
     }),
     CacheModule.registerAsync({

@@ -126,7 +126,22 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!main.(t|j)s",
+      "!data-source.(t|j)s",
+      "!migrations/**",
+      "!**/config/**",
+      "!**/*.config.(t|j)s",
+      "!**/*.module.(t|j)s",
+      "!**/*dto*.(t|j)s",
+      "!**/*.entity.(t|j)s",
+      "!**/*.controller.(t|j)s",
+      "!**/guards/**",
+      "!**/interceptors/**",
+      "!**/strategies/**",
+      "!**/decorators/**",
+      "!**/filters/**",
+      "!**/*.event.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",

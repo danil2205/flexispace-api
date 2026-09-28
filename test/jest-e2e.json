@@ -15,8 +15,19 @@
   "collectCoverageFrom": [
     "src/**/*.{ts,js}",
     "!src/main.{ts,js}",
+    "!src/data-source.{ts,js}",
+    "!src/migrations/**",
+    "!src/**/config/**",
+    "!src/**/*.config.{ts,js}",
     "!src/**/*.module.{ts,js}",
-    "!src/**/*.spec.{ts,js}"
+    "!src/**/*dto*.{ts,js}",
+    "!src/**/dtos/**",
+    "!src/**/*.entity.{ts,js}",
+    "!src/**/entities/**",
+    "!src/**/*.event.{ts,js}",
+    "!src/**/events/**",
+    "!src/**/*.spec.{ts,js}",
+    "!src/**/*.e2e-spec.{ts,js}"
   ],
   "coverageDirectory": "coverage-e2e"
 }

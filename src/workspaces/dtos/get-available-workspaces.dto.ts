@@ -4,13 +4,15 @@ import { Type } from 'class-transformer';
 import { IsDate, IsNotEmpty } from 'class-validator';
 
 export class GetAvailableWorkspacesBaseDto {
-  @ApiProperty({ example: '2026-04-24T22:00:00.000Z' })
+  @ApiProperty({ example: new Date(Date.now() + 60 * 60 * 1000).toISOString() })
   @IsNotEmpty()
   @Type(() => Date)
   @IsDate()
   startTime: Date;
 
-  @ApiProperty({ example: '2026-04-24T23:00:00.000Z' })
+  @ApiProperty({
+    example: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+  })
   @IsNotEmpty()
   @Type(() => Date)
   @IsDate()

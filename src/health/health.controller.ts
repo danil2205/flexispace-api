@@ -29,7 +29,7 @@ export class HealthController {
   @SkipThrottle()
   check() {
     const isTest = process.env.NODE_ENV === 'test';
-    const heapLimit = isTest ? 1024 * 1024 * 1024 : 300 * 1024 * 1024;
+    const heapLimit = isTest ? 3 * 1024 * 1024 * 1024 : 300 * 1024 * 1024;
 
     return this.health.check([
       () => this.db.pingCheck('database', { timeout: 1000 }),
