@@ -189,9 +189,10 @@ describe('AuthController (e2e)', () => {
         .auth(userAccessToken, { type: 'bearer' })
         .expect(HttpStatus.OK);
 
-      expect(response.body).toHaveProperty('qrCodeDataUrl');
-      expect(response.body).toHaveProperty('secret');
-      expect(response.body.qrCodeDataUrl).toMatch(/^data:image\/png;base64,/);
+      const body = response.body as { qrCodeDataUrl: string; secret: string };
+      expect(body).toHaveProperty('qrCodeDataUrl');
+      expect(body).toHaveProperty('secret');
+      expect(body.qrCodeDataUrl).toMatch(/^data:image\/png;base64,/);
     });
   });
 
