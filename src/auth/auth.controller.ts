@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -14,6 +15,7 @@ import { AuthService } from './auth.service';
 import { SignInUserDto } from './dtos/signin-user-dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RefreshTokenDto } from './dtos/refresh-token.dto';
+import { TfaCodeDto } from './dtos/tfa-code.dto';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { GoogleUser } from './interfaces/google-user.interface';
 import { CreateUserDto } from '../users/dtos/create-user.dto';
@@ -21,6 +23,7 @@ import { UsersService } from '../users/users.service';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
@@ -105,7 +108,7 @@ export class AuthController {
   @Post('sign-up')
   @ApiOperation({ summary: 'Register new user' })
   @ApiBody({ type: CreateUserDto })
-  @ApiOkResponse({ description: 'User created successfully' })
+  @ApiCreatedResponse({ description: 'User created successfully' })
   @ApiUnauthorizedResponse({ description: 'Validation or auth error' })
   @ApiTooManyRequestsResponse({ description: 'Too many requests' })
   @Throttle({ default: { limit: 5, ttl: 60000 } })
@@ -120,7 +123,6 @@ export class AuthController {
   @ApiOperation({
     summary: 'Logout current user',
   })
-  @ApiBody({ type: CreateUserDto })
   @ApiOkResponse({
     schema: { example: { message: 'Logged out successfully' } },
   })
@@ -154,48 +156,55 @@ export class AuthController {
     return this.authService.refreshTokens(refreshToken);
   }
 
-  @Post('2fa/generate')
+  @Post('2fa/setup')
   @Skip2FA()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('bearer')
   @ApiOperation({
-    summary: 'Generate a QR code for 2FA',
+    summary: 'Initialize 2FA setup and return QR code with secret',
   })
   @ApiOkResponse({
     schema: {
       example: {
         qrCodeDataUrl: 'data:image/png;base64,...',
+        secret: 'JBSWY3DPEHPK3PXP',
       },
     },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiTooManyRequestsResponse({ description: 'Too many requests' })
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  public async generate2FA(@CurrentUser('sub') userId: number) {
-    const { uri } = await this.authService.generateTfaSecret(userId);
-    return this.authService.generateQrCodeDataURL(uri);
+  public async setup2FA(@CurrentUser('sub') userId: number) {
+    const { secret, uri } = await this.authService.generateTfaSecret(userId);
+    const qrCodeDataUrl = await this.authService.generateQrCodeDataURL(uri);
+
+    return {
+      qrCodeDataUrl,
+      secret,
+    };
   }
 
-  @Post('2fa/turn-on')
+  @Post('2fa/enable')
   @Skip2FA()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('bearer')
   @ApiOperation({
-    summary: 'Turn on 2FA',
+    summary: 'Enable 2FA by verifying initial code',
   })
+  @ApiBody({ type: TfaCodeDto })
   @ApiOkResponse({
     schema: { example: { message: '2FA turned on successfully' } },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiTooManyRequestsResponse({ description: 'Too many requests' })
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  public async turnOn2FA(
+  public async enable2FA(
     @CurrentUser('sub') userId: number,
-    @Body('tfaCode') code: string,
+    @Body() { tfaCode }: TfaCodeDto,
   ) {
-    const isCodeValid = await this.authService.isTfaCodeValid(userId, code);
+    const isCodeValid = await this.authService.isTfaCodeValid(userId, tfaCode);
 
     if (!isCodeValid) {
       throw new UnauthorizedException(INVALID_2FA_CODE);
@@ -208,24 +217,25 @@ export class AuthController {
     return { message: '2FA turned on successfully' };
   }
 
-  @Post('2fa/turn-off')
+  @Delete('2fa')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('bearer')
   @ApiOperation({
-    summary: 'Turn off 2FA',
+    summary: 'Disable and remove 2FA',
   })
+  @ApiBody({ type: TfaCodeDto })
   @ApiOkResponse({
     schema: { example: { message: '2FA turned off successfully' } },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiTooManyRequestsResponse({ description: 'Too many requests' })
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  public async turnOff2FA(
+  public async disable2FA(
     @CurrentUser('sub') userId: number,
-    @Body('tfaCode') code: string,
+    @Body() { tfaCode }: TfaCodeDto,
   ) {
-    const isCodeValid = await this.authService.isTfaCodeValid(userId, code);
+    const isCodeValid = await this.authService.isTfaCodeValid(userId, tfaCode);
 
     if (!isCodeValid) {
       throw new UnauthorizedException(INVALID_2FA_CODE);
@@ -239,24 +249,27 @@ export class AuthController {
     return { message: '2FA turned off successfully' };
   }
 
-  @Post('2fa/authenticate')
+  @Post('2fa/verify')
   @HttpCode(HttpStatus.OK)
   @Skip2FA()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('bearer')
   @ApiOperation({
-    summary: 'Authenticate with 2FA',
+    summary: 'Verify 2FA TOTP code and complete login',
   })
+  @ApiBody({ type: TfaCodeDto })
   @ApiOkResponse({
-    schema: { example: { message: '2FA authenticated successfully' } },
+    schema: {
+      example: { accessToken: 'jwt_token', refreshToken: 'jwt_token' },
+    },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiTooManyRequestsResponse({ description: 'Too many requests' })
   @Throttle({ default: { limit: 5, ttl: 60000 } })
-  public async authenticate2FA(
+  public async verify2FA(
     @CurrentUser('sub') userId: number,
-    @Body('tfaCode') code: string,
+    @Body() { tfaCode }: TfaCodeDto,
   ) {
-    return this.authService.tfaAuthenticate(userId, code);
+    return this.authService.tfaAuthenticate(userId, tfaCode);
   }
 }

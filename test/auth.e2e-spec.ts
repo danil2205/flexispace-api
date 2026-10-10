@@ -176,27 +176,29 @@ describe('AuthController (e2e)', () => {
     });
   });
 
-  describe('POST /auth/2fa/generate', () => {
+  describe('POST /auth/2fa/setup', () => {
     it('should return 401 if no token provided', () => {
       return request(app.getHttpServer() as Server)
-        .post('/auth/2fa/generate')
+        .post('/auth/2fa/setup')
         .expect(HttpStatus.UNAUTHORIZED);
     });
 
-    it('should generate QR code', async () => {
+    it('should generate QR code and secret', async () => {
       const response = await request(app.getHttpServer() as Server)
-        .post('/auth/2fa/generate')
+        .post('/auth/2fa/setup')
         .auth(userAccessToken, { type: 'bearer' })
         .expect(HttpStatus.OK);
 
-      expect(response.text).toMatch(/^data:image\/png;base64,/);
+      expect(response.body).toHaveProperty('qrCodeDataUrl');
+      expect(response.body).toHaveProperty('secret');
+      expect(response.body.qrCodeDataUrl).toMatch(/^data:image\/png;base64,/);
     });
   });
 
-  describe('POST /auth/2fa/turn-on', () => {
+  describe('POST /auth/2fa/enable', () => {
     it('should return 401 for invalid 2FA code', () => {
       return request(app.getHttpServer() as Server)
-        .post('/auth/2fa/turn-on')
+        .post('/auth/2fa/enable')
         .auth(userAccessToken, { type: 'bearer' })
         .send({ tfaCode: '000000' })
         .expect(HttpStatus.UNAUTHORIZED);
@@ -206,7 +208,7 @@ describe('AuthController (e2e)', () => {
       jest.spyOn(authService, 'isTfaCodeValid').mockResolvedValueOnce(true);
 
       const response = await request(app.getHttpServer() as Server)
-        .post('/auth/2fa/turn-on')
+        .post('/auth/2fa/enable')
         .auth(userAccessToken, { type: 'bearer' })
         .send({ tfaCode: '123456' })
         .expect(HttpStatus.OK);
@@ -223,12 +225,12 @@ describe('AuthController (e2e)', () => {
     });
   });
 
-  describe('POST /auth/2fa/authenticate', () => {
+  describe('POST /auth/2fa/verify', () => {
     it('should authenticate 2FA successfully', async () => {
       jest.spyOn(authService, 'isTfaCodeValid').mockResolvedValueOnce(true);
 
       const response = await request(app.getHttpServer() as Server)
-        .post('/auth/2fa/authenticate')
+        .post('/auth/2fa/verify')
         .auth(userAccessToken, { type: 'bearer' })
         .send({ tfaCode: '123456' })
         .expect(HttpStatus.OK);
@@ -237,12 +239,12 @@ describe('AuthController (e2e)', () => {
     });
   });
 
-  describe('POST /auth/2fa/turn-off', () => {
+  describe('DELETE /auth/2fa', () => {
     it('should successfully turn off 2FA if code is valid', async () => {
       jest.spyOn(authService, 'isTfaCodeValid').mockResolvedValueOnce(true);
 
       const response = await request(app.getHttpServer() as Server)
-        .post('/auth/2fa/turn-off')
+        .delete('/auth/2fa')
         .auth(userAccessToken, { type: 'bearer' })
         .send({ tfaCode: '123456' })
         .expect(HttpStatus.OK);
