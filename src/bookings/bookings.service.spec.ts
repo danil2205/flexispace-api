@@ -8,7 +8,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   BadRequestException,
   ConflictException,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { BOOKING_ERRORS, BOOKING_MESSAGES } from './booking.constants';
@@ -194,14 +193,12 @@ describe('BookingsService', () => {
       const result = await service.createBooking(userId, dto);
 
       expect(mockStripeService.createCheckoutSession).toHaveBeenCalled();
-      expect(mockManagerCreate).toHaveBeenCalled();
+      expect(mockManagerCreate).toHaveBeenCalledWith(
+        Booking,
+        expect.objectContaining({ paymentSessionId: mockSession.id }),
+      );
       expect(mockManagerSave).toHaveBeenCalled();
       expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-      expect(mockDsManagerUpdate).toHaveBeenCalledWith(
-        Booking,
-        expect.any(String),
-        { paymentSessionId: mockSession.id },
-      );
       expect(mockEventEmitter.emit).toHaveBeenCalledWith(
         'workspace.updated',
         expect.objectContaining({ event: 'workspace_locked' }),
@@ -252,14 +249,16 @@ describe('BookingsService', () => {
             mockWorkspace.pricePerHour * (100 - mockPromo.discountPercentage),
         }),
       );
-      expect(mockDsManagerUpdate).toHaveBeenCalledWith(
+      expect(mockManagerCreate).toHaveBeenCalledWith(
         Booking,
-        expect.any(String),
-        { paymentSessionId: mockSession.id },
+        expect.objectContaining({
+          paymentSessionId: mockSession.id,
+          promoCode: { id: 'promo' },
+        }),
       );
     });
 
-    it('should delete booking and revert promo code if Stripe session creation fails', async () => {
+    it('should rollback transaction and expire Stripe session if an error occurs', async () => {
       const mockPromo = { id: 'promo', discountPercentage: 20 };
 
       mockManagerFindOne.mockResolvedValue(mockWorkspace);
@@ -270,11 +269,6 @@ describe('BookingsService', () => {
       (mockStripeService.createCheckoutSession as jest.Mock).mockRejectedValue(
         new Error('Stripe error'),
       );
-      mockManagerCreate.mockReturnValue({
-        workspace: { id: dto.workspaceId },
-        startTime: dto.startTime,
-        endTime: dto.endTime,
-      });
 
       await expect(
         service.createBooking(userId, {
@@ -283,18 +277,8 @@ describe('BookingsService', () => {
         }),
       ).rejects.toThrow('Stripe error');
 
-      expect(mockManagerSave).toHaveBeenCalled();
-      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
-
-      expect(mockPromoCodesService.changeUses).toHaveBeenLastCalledWith(
-        mockDataSource.manager,
-        'promo',
-        1,
-      );
-      expect(mockDsManagerDelete).toHaveBeenCalledWith(
-        Booking,
-        expect.any(String),
-      );
+      expect(mockQueryRunner.rollbackTransaction).toHaveBeenCalled();
+      expect(mockQueryRunner.release).toHaveBeenCalled();
     });
   });
 
@@ -467,11 +451,11 @@ describe('BookingsService', () => {
 
       await service.cancelExpiredBookings();
 
+      expect(mockDsManagerUpdate).not.toHaveBeenCalled();
       expect(mockEventEmitter.emit).not.toHaveBeenCalled();
-      expect(mockDsManagerSave).not.toHaveBeenCalled();
     });
 
-    it('should cancel each expired booking and emit events', async () => {
+    it('should batch update expired bookings to CANCELLED and emit events', async () => {
       const expiredBookings = [
         { id: 'b1', status: BookingStatus.PENDING, promoCode: null },
         { id: 'b2', status: BookingStatus.PENDING, promoCode: { id: '52' } },
@@ -480,36 +464,24 @@ describe('BookingsService', () => {
 
       await service.cancelExpiredBookings();
 
-      expect(expiredBookings[0].status).toBe(BookingStatus.CANCELLED);
-      expect(expiredBookings[1].status).toBe(BookingStatus.CANCELLED);
-      expect(mockDsManagerSave).toHaveBeenCalledTimes(2);
-      expect(mockEventEmitter.emit).toHaveBeenCalledTimes(2);
-      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
-        'booking.cancelled',
-        expect.any(BookingCancelledEvent),
+      expect(mockDsManagerUpdate).toHaveBeenCalledWith(
+        Booking,
+        expect.anything(),
+        {
+          status: BookingStatus.CANCELLED,
+        },
       );
-    });
-
-    it('should continue expiring bookings if one of them fails to cancel', async () => {
-      const expiredBookings = [
-        { id: 'b1', status: BookingStatus.PENDING, promoCode: null },
-        { id: 'b2', status: BookingStatus.PENDING, promoCode: { id: '52' } },
-      ];
-      mockDsManagerFind.mockResolvedValue(expiredBookings);
-      mockDsManagerSave
-        .mockRejectedValueOnce(new Error('DB error'))
-        .mockResolvedValueOnce(expiredBookings[1]);
-
-      const loggerSpy = jest
-        .spyOn(Logger.prototype, 'error')
-        .mockImplementation(() => {});
-
-      await service.cancelExpiredBookings();
-
-      expect(mockDsManagerSave).toHaveBeenCalledTimes(2);
-      expect(mockEventEmitter.emit).toHaveBeenCalledTimes(1);
-
-      loggerSpy.mockRestore();
+      expect(mockEventEmitter.emit).toHaveBeenCalledTimes(2);
+      expect(mockEventEmitter.emit).toHaveBeenNthCalledWith(
+        1,
+        'booking.cancelled',
+        expect.objectContaining({ booking: expiredBookings[0] }),
+      );
+      expect(mockEventEmitter.emit).toHaveBeenNthCalledWith(
+        2,
+        'booking.cancelled',
+        expect.objectContaining({ booking: expiredBookings[1] }),
+      );
     });
   });
 

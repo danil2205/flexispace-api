@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Booking } from './entities/booking.entity';
-import { DataSource, EntityManager, Raw } from 'typeorm';
+import { DataSource, EntityManager, In, Raw } from 'typeorm';
 import { CreateBookingDto } from './dtos/create-booking.dto';
 import { BOOKING_ERRORS, BOOKING_MESSAGES } from './booking.constants';
 import { Workspace } from 'src/workspaces/workspace.entity';
@@ -38,14 +38,16 @@ export class BookingsService {
   ) {}
 
   async createBooking(id: number, createBookingDto: CreateBookingDto) {
-    const start = new Date(createBookingDto.startTime);
-    const end = new Date(createBookingDto.endTime);
+    const { startTime: start, endTime: end } = createBookingDto;
     this.validateBookingDates(start, end);
 
     const bookingId = randomUUID();
     let totalPrice = 0;
     let workspace: Workspace | null = null;
     let appliedPromoCode: PromoCode | null = null;
+    let session: Awaited<
+      ReturnType<StripeService['createCheckoutSession']>
+    > | null = null;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -89,34 +91,6 @@ export class BookingsService {
         appliedPromoCode = promoResult.appliedPromoCode;
       }
 
-      const booking = queryRunner.manager.create(Booking, {
-        id: bookingId,
-        user: { id },
-        workspace: { id: createBookingDto.workspaceId },
-        startTime: start,
-        endTime: end,
-        price: totalPrice,
-        paymentSessionId: '',
-        promoCode: appliedPromoCode ? { id: appliedPromoCode.id } : undefined,
-      });
-
-      await queryRunner.manager.save(booking);
-      await queryRunner.commitTransaction();
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
-
-    if (!workspace) {
-      throw new BadRequestException(BOOKING_ERRORS.WORKSPACE_NOT_FOUND);
-    }
-
-    let session: Awaited<
-      ReturnType<StripeService['createCheckoutSession']>
-    > | null = null;
-    try {
       session = await this.stripeService.createCheckoutSession({
         amount: totalPrice * 100,
         currency: 'UAH',
@@ -129,9 +103,19 @@ export class BookingsService {
         cancelUrl: `http://localhost:3500/payment/cancel?bookingId=${bookingId}`,
       });
 
-      await this.dataSource.manager.update(Booking, bookingId, {
+      const booking = queryRunner.manager.create(Booking, {
+        id: bookingId,
+        user: { id },
+        workspace: { id: createBookingDto.workspaceId },
+        startTime: start,
+        endTime: end,
+        price: totalPrice,
         paymentSessionId: session.id,
+        promoCode: appliedPromoCode ? { id: appliedPromoCode.id } : undefined,
       });
+
+      await queryRunner.manager.save(booking);
+      await queryRunner.commitTransaction();
 
       const workspaceUpdatedEvent: WorkspaceUpdatedEvent = {
         event: 'workspace_locked',
@@ -149,8 +133,13 @@ export class BookingsService {
         },
       };
     } catch (error) {
-      await this.cleanupFailedBooking(bookingId, session, appliedPromoCode);
+      await queryRunner.rollbackTransaction();
+      if (session) {
+        await this.stripeService.expireSession(session.id);
+      }
       throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
 
@@ -233,8 +222,7 @@ export class BookingsService {
   }
 
   public async joinWaitlist(id: number, createWaitlistDto: CreateWaitlistDto) {
-    const startTime = new Date(createWaitlistDto.startTime);
-    const endTime = new Date(createWaitlistDto.endTime);
+    const { startTime, endTime } = createWaitlistDto;
     this.validateBookingDates(startTime, endTime);
 
     const workspace = await this.dataSource.manager.findOne(Workspace, {
@@ -272,26 +260,24 @@ export class BookingsService {
       relations: { promoCode: true },
     });
 
+    if (expiredBookings.length === 0) return;
+
     this.logger.warn(
       `Found ${expiredBookings.length} expired bookings. Starting to cancel...`,
     );
 
-    for (const booking of expiredBookings) {
-      try {
-        booking.status = BookingStatus.CANCELLED;
-        await this.dataSource.manager.save(booking);
+    const expiredIds = expiredBookings.map((b) => b.id);
+    await this.dataSource.manager.update(
+      Booking,
+      { id: In(expiredIds) },
+      { status: BookingStatus.CANCELLED },
+    );
 
-        this.eventEmitter.emit(
-          'booking.cancelled',
-          new BookingCancelledEvent(booking),
-        );
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : JSON.stringify(error);
-        this.logger.error(
-          `Booking ${booking.id} could not be cancelled: ${message}`,
-        );
-      }
+    for (const booking of expiredBookings) {
+      this.eventEmitter.emit(
+        'booking.cancelled',
+        new BookingCancelledEvent(booking),
+      );
     }
   }
 
@@ -359,23 +345,5 @@ export class BookingsService {
     await this.promoCodesService.changeUses(manager, appliedPromoCode.id, -1);
 
     return { totalPrice: finalPrice, appliedPromoCode };
-  }
-
-  private async cleanupFailedBooking(
-    bookingId: string,
-    session: { id: string } | null,
-    appliedPromoCode: PromoCode | null,
-  ): Promise<void> {
-    if (session) {
-      await this.stripeService.expireSession(session.id);
-    }
-    if (appliedPromoCode) {
-      await this.promoCodesService.changeUses(
-        this.dataSource.manager,
-        appliedPromoCode.id,
-        1,
-      );
-    }
-    await this.dataSource.manager.delete(Booking, bookingId);
   }
 }
