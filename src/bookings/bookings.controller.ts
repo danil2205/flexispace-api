@@ -31,7 +31,7 @@ import {
 import { CancelBookingParamDto } from './dtos/cancel-booking-param.dto';
 import { CreateWaitlistDto } from './dtos/create-waitlist.dto';
 import { AntiFraudLimit } from 'src/auth/decorators/anti-fraud-limit.decorator';
-import { AntiFraudInterceptor } from 'src/auth/interceptors/anti-fraud.guard';
+import { AntiFraudInterceptor } from 'src/auth/interceptors/anti-fraud.interceptor';
 import { Throttle } from '@nestjs/throttler';
 
 @UseGuards(JwtAuthGuard)

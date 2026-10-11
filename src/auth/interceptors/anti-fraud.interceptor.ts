@@ -13,7 +13,7 @@ import { ActiveUserData } from '../interfaces/active-user-data.interface';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { AntiFraudCacheData } from '../interfaces/anti-fraud-cache-data.interface';
-import { catchError, Observable } from 'rxjs';
+import { catchError, from, Observable, switchMap, throwError } from 'rxjs';
 
 @Injectable()
 export class AntiFraudInterceptor implements NestInterceptor {
@@ -61,16 +61,17 @@ export class AntiFraudInterceptor implements NestInterceptor {
     const remainingTtl = Math.max(0, redisData.expiresAt - now);
     if (remainingTtl > 0) {
       await this.cacheManager.set(redisKey, redisData, remainingTtl);
-    } else {
-      await this.cacheManager.del(redisKey);
     }
 
-    return next.handle().pipe(
-      catchError(async (err: Error) => {
-        await this.rollbackRedisCount(redisKey);
-        throw err;
-      }),
-    );
+    return next
+      .handle()
+      .pipe(
+        catchError((err: Error) =>
+          from(this.rollbackRedisCount(redisKey)).pipe(
+            switchMap(() => throwError(() => err)),
+          ),
+        ),
+      );
   }
 
   private async rollbackRedisCount(redisKey: string) {
