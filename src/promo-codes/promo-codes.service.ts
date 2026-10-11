@@ -38,25 +38,29 @@ export class PromoCodesService {
     return this.promoCodeRepository.find({ order: { createdAt: 'DESC' } });
   }
 
-  async update(id: string, dto: PatchPromoCodeDto) {
+  async findOneById(id: string): Promise<PromoCode> {
     const promoCode = await this.promoCodeRepository.findOne({ where: { id } });
+
     if (!promoCode) {
       throw new BadRequestException(PC_ERRORS.NOT_FOUND);
     }
 
-    promoCode.code = dto.code?.toUpperCase() ?? promoCode.code;
-    promoCode.maxUses = dto.maxUses ?? promoCode.maxUses;
-    promoCode.remainingUses = dto.remainingUses ?? promoCode.remainingUses;
-    promoCode.isActive = dto.isActive ?? promoCode.isActive;
-    promoCode.discountPercentage =
-      dto.discountPercentage ?? promoCode.discountPercentage;
-    promoCode.expiresAt = dto.expiresAt ?? promoCode.expiresAt;
-    if (dto.conditions) {
-      promoCode.conditions = {
-        ...(promoCode.conditions || {}),
-        ...dto.conditions,
-      };
-    }
+    return promoCode;
+  }
+
+  async update(id: string, dto: PatchPromoCodeDto) {
+    const promoCode = await this.findOneById(id);
+
+    Object.assign(promoCode, {
+      ...dto,
+      ...(dto.code && { code: dto.code.toUpperCase() }),
+      ...(dto.conditions && {
+        conditions: {
+          ...promoCode.conditions,
+          ...dto.conditions,
+        },
+      }),
+    });
 
     return this.promoCodeRepository.save(promoCode);
   }
@@ -72,10 +76,7 @@ export class PromoCodesService {
   }
 
   async delete(id: string): Promise<void> {
-    const promoCode = await this.promoCodeRepository.findOne({ where: { id } });
-    if (!promoCode) {
-      throw new BadRequestException(PC_ERRORS.NOT_FOUND);
-    }
+    await this.findOneById(id);
     await this.promoCodeRepository.softDelete(id);
   }
 }
