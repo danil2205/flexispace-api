@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import mailConfig from 'src/config/mail.config';
 import { MailProcessor } from './mail.processor';
-import { BullModule } from '@nestjs/bullmq';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { MailtrapTransport } from 'mailtrap';
 import { join } from 'path';
@@ -38,7 +37,6 @@ import { EjsAdapter } from '@nestjs-modules/mailer/adapters/ejs.adapter';
       }),
     }),
     ConfigModule.forFeature(mailConfig),
-    BullModule.registerQueue({ name: 'emails' }),
   ],
   providers: [MailProcessor],
   exports: [],

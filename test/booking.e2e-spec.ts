@@ -356,7 +356,7 @@ describe('BookingsController (e2e)', () => {
       await request(app.getHttpServer() as Server)
         .delete(`/bookings/${bookingId}`)
         .auth(adminToken, { type: 'bearer' })
-        .expect(HttpStatus.OK);
+        .expect(HttpStatus.NO_CONTENT);
 
       const dbBooking = await bookingsRepo.findOne({
         where: { id: bookingId },

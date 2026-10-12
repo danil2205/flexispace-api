@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Booking } from './entities/booking.entity';
-import { DataSource, EntityManager, In, Raw } from 'typeorm';
+import { DataSource, EntityManager, In, LessThan } from 'typeorm';
 import { CreateBookingDto } from './dtos/create-booking.dto';
 import { BOOKING_ERRORS, BOOKING_MESSAGES } from './booking.constants';
 import { Workspace } from 'src/workspaces/workspace.entity';
@@ -250,12 +250,11 @@ export class BookingsService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   public async cancelExpiredBookings() {
-    this.logger.debug('Checking for expired bookings');
-
+    const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000);
     const expiredBookings = await this.dataSource.manager.find(Booking, {
       where: {
         status: BookingStatus.PENDING,
-        createdAt: Raw((alias) => `${alias} < NOW() - INTERVAL '10 minutes'`),
+        createdAt: LessThan(tenMinsAgo),
       },
       relations: { promoCode: true },
     });

@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
   UseInterceptors,
@@ -20,7 +21,9 @@ import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -46,7 +49,7 @@ export class BookingsController {
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Create booking' })
   @ApiBody({ type: CreateBookingDto })
-  @ApiOkResponse({ description: 'Booking created successfully' })
+  @ApiCreatedResponse({ description: 'Booking created successfully' })
   @ApiBadRequestResponse({
     description: 'Invalid booking data or workspace not available',
   })
@@ -95,7 +98,7 @@ export class BookingsController {
   @Post('waitlist')
   @ApiOperation({ summary: 'Join waitlist' })
   @ApiBody({ type: CreateWaitlistDto })
-  @ApiOkResponse({ description: 'Joined waitlist successfully' })
+  @ApiCreatedResponse({ description: 'Joined waitlist successfully' })
   @ApiBadRequestResponse({
     description: 'Invalid waitlist data or workspace not available',
   })
@@ -108,6 +111,7 @@ export class BookingsController {
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete booking (admin only)' })
@@ -118,11 +122,13 @@ export class BookingsController {
     format: 'uuid',
     example: '6187b9c9-47f5-43a5-b314-f074082a9ce1',
   })
-  @ApiOkResponse({ description: 'Booking deleted successfully' })
+  @ApiNoContentResponse({ description: 'Booking deleted successfully' })
   @ApiNotFoundResponse({ description: 'Booking not found' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'Forbidden: admin role required' })
-  async deleteBooking(@Param('id') id: string) {
+  async deleteBooking(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
     return this.bookingsService.delete(id);
   }
 }
