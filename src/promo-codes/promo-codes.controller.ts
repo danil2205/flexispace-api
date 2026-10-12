@@ -7,6 +7,9 @@ import {
   Patch,
   Param,
   Delete,
+  HttpCode,
+  HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { PromoCodesService } from './promo-codes.service';
 import { CreatePromoCodeDto } from './dtos/create-promo-code.dto';
@@ -22,6 +25,8 @@ import {
   ApiForbiddenResponse,
   ApiConflictResponse,
   ApiBadRequestResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/enums/user-role.enum';
@@ -33,7 +38,7 @@ import { PatchPromoCodeDto } from './dtos/patch-promo-code.dto';
 @ApiForbiddenResponse({ description: 'Forbidden - Requires admin role' })
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
-@Controller('promocodes')
+@Controller('promo-codes')
 export class PromoCodesController {
   constructor(private readonly promoCodesService: PromoCodesService) {}
 
@@ -56,16 +61,20 @@ export class PromoCodesController {
   @Patch(':id')
   @ApiOperation({ summary: 'Update promo code (admin only)' })
   @ApiOkResponse({ description: 'Promo code updated successfully' })
-  @ApiBadRequestResponse({ description: 'Promo code not found' })
-  async update(@Param('id') id: string, @Body() dto: PatchPromoCodeDto) {
+  @ApiNotFoundResponse({ description: 'Promo code not found' })
+  async update(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: PatchPromoCodeDto,
+  ) {
     return this.promoCodesService.update(id, dto);
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete promo code (admin only)' })
-  @ApiOkResponse({ description: 'Promo code deleted successfully' })
-  @ApiBadRequestResponse({ description: 'Promo code not found' })
-  async delete(@Param('id') id: string) {
+  @ApiNoContentResponse({ description: 'Promo code deleted successfully' })
+  @ApiNotFoundResponse({ description: 'Promo code not found' })
+  async delete(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.promoCodesService.delete(id);
   }
 }

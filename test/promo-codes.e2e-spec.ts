@@ -56,7 +56,7 @@ describe('PromoCodesController (e2e)', () => {
     await app.close();
   });
 
-  describe('/promocodes (GET)', () => {
+  describe('/promo-codes (GET)', () => {
     beforeAll(async () => {
       savedPromoCodes = await promoCodeRepo.save([
         {
@@ -76,7 +76,7 @@ describe('PromoCodesController (e2e)', () => {
 
     it('should return all promo codes', async () => {
       const response = await request(app.getHttpServer() as Server)
-        .get('/promocodes')
+        .get('/promo-codes')
         .auth(adminToken, { type: 'bearer' })
         .expect(HttpStatus.OK);
 
@@ -89,7 +89,7 @@ describe('PromoCodesController (e2e)', () => {
     });
   });
 
-  describe('POST /promocodes', () => {
+  describe('POST /promo-codes', () => {
     let createDto: CreatePromoCodeDto;
 
     beforeAll(() => {
@@ -103,14 +103,14 @@ describe('PromoCodesController (e2e)', () => {
 
     it('should return 401 Unauthorized if no token is provided', () => {
       return request(app.getHttpServer() as Server)
-        .post('/promocodes')
+        .post('/promo-codes')
         .send(createDto)
         .expect(HttpStatus.UNAUTHORIZED);
     });
 
     it('should return 403 Forbidden for user', () => {
       return request(app.getHttpServer() as Server)
-        .post('/promocodes')
+        .post('/promo-codes')
         .auth(userToken, { type: 'bearer' })
         .send(createDto)
         .expect(HttpStatus.FORBIDDEN);
@@ -118,7 +118,7 @@ describe('PromoCodesController (e2e)', () => {
 
     it('should return 400 for invalid data', () => {
       return request(app.getHttpServer() as Server)
-        .post('/promocodes')
+        .post('/promo-codes')
         .auth(adminToken, { type: 'bearer' })
         .send({})
         .expect(HttpStatus.BAD_REQUEST)
@@ -131,7 +131,7 @@ describe('PromoCodesController (e2e)', () => {
 
     it('should return 409 for duplicate promo code', () => {
       return request(app.getHttpServer() as Server)
-        .post('/promocodes')
+        .post('/promo-codes')
         .auth(adminToken, { type: 'bearer' })
         .send({ ...createDto, code: 'PROMO' })
         .expect(HttpStatus.CONFLICT)
@@ -144,7 +144,7 @@ describe('PromoCodesController (e2e)', () => {
 
     it('should create a new promo code', async () => {
       const response = await request(app.getHttpServer() as Server)
-        .post('/promocodes')
+        .post('/promo-codes')
         .auth(adminToken, { type: 'bearer' })
         .send(createDto)
         .expect(HttpStatus.CREATED);
@@ -169,24 +169,24 @@ describe('PromoCodesController (e2e)', () => {
     });
   });
 
-  describe('/promocodes/:id (PATCH)', () => {
+  describe('/promo-codes/:id (PATCH)', () => {
     let promoId: string;
 
     beforeAll(() => {
       promoId = savedPromoCodes[0].id;
     });
 
-    it('should return 400 when updating non-existent promo code', () => {
-      const nonExistentId = '11111111-1111-1111-1111-111111111111';
+    it('should return 404 when updating non-existent promo code', () => {
+      const nonExistentIdV4 = '635955f4-6fc1-4eec-b98b-987823f6e91f';
       return request(app.getHttpServer() as Server)
-        .patch(`/promocodes/${nonExistentId}`)
+        .patch(`/promo-codes/${nonExistentIdV4}`)
         .auth(adminToken, { type: 'bearer' })
         .send({ discountPercentage: 42 })
-        .expect(HttpStatus.BAD_REQUEST)
+        .expect(HttpStatus.NOT_FOUND)
         .expect((res) => {
           const body = res.body as { message: string; error: string };
           expect(body.message).toBe(PC_ERRORS.NOT_FOUND);
-          expect(body.error).toBe('Bad Request');
+          expect(body.error).toBe('Not Found');
         });
     });
 
@@ -198,7 +198,7 @@ describe('PromoCodesController (e2e)', () => {
       };
 
       const response = await request(app.getHttpServer() as Server)
-        .patch(`/promocodes/${promoId}`)
+        .patch(`/promo-codes/${promoId}`)
         .auth(adminToken, { type: 'bearer' })
         .send(dto)
         .expect(HttpStatus.OK);
@@ -219,7 +219,7 @@ describe('PromoCodesController (e2e)', () => {
     });
   });
 
-  describe('/promocodes/:id (DELETE)', () => {
+  describe('/promo-codes/:id (DELETE)', () => {
     let promoId: string;
 
     beforeAll(() => {
@@ -228,33 +228,33 @@ describe('PromoCodesController (e2e)', () => {
 
     it('should return 401 when not authenticated', async () => {
       await request(app.getHttpServer() as Server)
-        .delete(`/promocodes/${promoId}`)
+        .delete(`/promo-codes/${promoId}`)
         .expect(HttpStatus.UNAUTHORIZED);
     });
 
     it('should return 403 when not authorized', async () => {
       await request(app.getHttpServer() as Server)
-        .delete(`/promocodes/${promoId}`)
+        .delete(`/promo-codes/${promoId}`)
         .auth(userToken, { type: 'bearer' })
         .expect(HttpStatus.FORBIDDEN);
     });
 
-    it('should return 400 when promo code does not exist', async () => {
-      const nonExistentId = '11111111-1111-1111-1111-111111111111';
+    it('should return 404 when promo code does not exist', async () => {
+      const nonExistentIdV4 = '635955f4-6fc1-4eec-b98b-987823f6e91f';
       await request(app.getHttpServer() as Server)
-        .delete(`/promocodes/${nonExistentId}`)
+        .delete(`/promo-codes/${nonExistentIdV4}`)
         .auth(adminToken, { type: 'bearer' })
-        .expect(HttpStatus.BAD_REQUEST);
+        .expect(HttpStatus.NOT_FOUND);
     });
 
     it('should soft delete promo code when authorized', async () => {
       await request(app.getHttpServer() as Server)
-        .delete(`/promocodes/${promoId}`)
+        .delete(`/promo-codes/${promoId}`)
         .auth(adminToken, { type: 'bearer' })
-        .expect(HttpStatus.OK);
+        .expect(HttpStatus.NO_CONTENT);
 
       const getResponse = await request(app.getHttpServer() as Server)
-        .get('/promocodes')
+        .get('/promo-codes')
         .auth(adminToken, { type: 'bearer' })
         .expect(HttpStatus.OK);
 

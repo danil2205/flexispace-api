@@ -3,7 +3,7 @@ import { PromoCodesService } from './promo-codes.service';
 import { EntityManager, Repository } from 'typeorm';
 import { PromoCode } from './promo-code.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 
 describe('PromoCodesService', () => {
   let service: PromoCodesService;
@@ -100,11 +100,11 @@ describe('PromoCodesService', () => {
   });
 
   describe('update', () => {
-    it('should throw BadRequestException if promo code not found', async () => {
+    it('should throw NotFoundException if promo code not found', async () => {
       (mockPromoCodeRepository.findOne as jest.Mock).mockResolvedValue(null);
 
       await expect(service.update('1', { code: 'NEW' })).rejects.toThrow(
-        BadRequestException,
+        NotFoundException,
       );
     });
 
@@ -171,10 +171,10 @@ describe('PromoCodesService', () => {
   });
 
   describe('delete', () => {
-    it('should throw BadRequestException if promo code not found', async () => {
+    it('should throw NotFoundException if promo code not found', async () => {
       (mockPromoCodeRepository.findOne as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.delete('1')).rejects.toThrow(BadRequestException);
+      await expect(service.delete('1')).rejects.toThrow(NotFoundException);
       expect(mockPromoCodeRepository.softDelete).not.toHaveBeenCalled();
     });
 

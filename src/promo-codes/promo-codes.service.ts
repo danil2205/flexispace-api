@@ -1,7 +1,7 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PromoCode } from './promo-code.entity';
@@ -42,7 +42,7 @@ export class PromoCodesService {
     const promoCode = await this.promoCodeRepository.findOne({ where: { id } });
 
     if (!promoCode) {
-      throw new BadRequestException(PC_ERRORS.NOT_FOUND);
+      throw new NotFoundException(PC_ERRORS.NOT_FOUND);
     }
 
     return promoCode;
