@@ -57,6 +57,18 @@ services:
     container_name: flexispace-redis
     ports:
       - '6379:6379'
+  stripe-cli:
+    image: stripe/stripe-cli:latest
+    container_name: flexispace-stripe-cli
+    entrypoint: []
+    env_file:
+      - .env.development
+    command:
+      - /bin/sh
+      - -c
+      - stripe listen --api-key $$STRIPE_SECRET_KEY --all-snapshot --forward-to api:3000/stripe/webhook
+    depends_on:
+      - api
 
 volumes:
   postgres_data:

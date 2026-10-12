@@ -21,6 +21,7 @@ import {
 import {
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { User } from '../users/user.entity';
@@ -203,10 +204,10 @@ describe('AuthService', () => {
   });
 
   describe('generateTfaSecret', () => {
-    it('should throw error if user not found', async () => {
+    it('should throw NotFoundException if user not found', async () => {
       (mockUsersService.findOneById as jest.Mock).mockResolvedValue(null);
       await expect(service.generateTfaSecret(1)).rejects.toThrow(
-        new UnauthorizedException(USER_NOT_FOUND),
+        new NotFoundException(USER_NOT_FOUND),
       );
     });
 
@@ -241,22 +242,18 @@ describe('AuthService', () => {
   });
 
   describe('isTfaCodeValid', () => {
-    it('should return false if user has no 2FA secret', async () => {
-      (mockUsersService.findOneById as jest.Mock).mockResolvedValue(mockUser);
+    it('should return false if 2FA code is invalid', async () => {
+      (verify as jest.Mock).mockResolvedValue({ valid: false });
 
-      const result = await service.isTfaCodeValid(1, '123456');
+      const result = await service.isTfaCodeValid('secret', '000000');
 
       expect(result).toBe(false);
     });
 
     it('should return true if 2FA code is valid', async () => {
-      (mockUsersService.findOneById as jest.Mock).mockResolvedValue({
-        ...mockUser,
-        twoFASecret: 'secret',
-      });
       (verify as jest.Mock).mockResolvedValue({ valid: true });
 
-      const result = await service.isTfaCodeValid(1, '123456');
+      const result = await service.isTfaCodeValid('secret', '123456');
 
       expect(verify).toHaveBeenCalledWith({
         token: '123456',
@@ -268,6 +265,10 @@ describe('AuthService', () => {
 
   describe('tfaAuthenticate', () => {
     it('should throw error if code is invalid', async () => {
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        twoFASecret: 'secret',
+      });
       jest.spyOn(service, 'isTfaCodeValid').mockResolvedValue(false);
 
       await expect(service.tfaAuthenticate(1, '123456')).rejects.toThrow(
@@ -277,7 +278,10 @@ describe('AuthService', () => {
 
     it('should return tokens if code is valid', async () => {
       const tokens = { accessToken: 'token', requires2FA: false };
-      (mockUsersService.findOneById as jest.Mock).mockResolvedValue(mockUser);
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        twoFASecret: 'secret',
+      });
       jest.spyOn(service, 'isTfaCodeValid').mockResolvedValue(true);
       const generateTokensSpy = jest
         .spyOn(service, 'generateTokens')
@@ -285,8 +289,102 @@ describe('AuthService', () => {
 
       const result = await service.tfaAuthenticate(1, '123456');
 
-      expect(generateTokensSpy).toHaveBeenCalledWith(mockUser, true);
+      expect(generateTokensSpy).toHaveBeenCalledWith(
+        { ...mockUser, twoFASecret: 'secret' },
+        true,
+      );
       expect(result).toEqual(tokens);
+    });
+  });
+
+  describe('enable2FA', () => {
+    it('should throw NotFoundException if user does not exist', async () => {
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.enable2FA(1, '123456')).rejects.toThrow(
+        new NotFoundException(USER_NOT_FOUND),
+      );
+    });
+
+    it('should throw UnauthorizedException if user has no 2FA secret', async () => {
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue(mockUser);
+
+      await expect(service.enable2FA(1, '123456')).rejects.toThrow(
+        new UnauthorizedException(INVALID_2FA_CODE),
+      );
+    });
+
+    it('should throw UnauthorizedException if code is invalid', async () => {
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        twoFASecret: 'secret',
+      });
+      jest.spyOn(service, 'isTfaCodeValid').mockResolvedValue(false);
+
+      await expect(service.enable2FA(1, '000000')).rejects.toThrow(
+        new UnauthorizedException(INVALID_2FA_CODE),
+      );
+    });
+
+    it('should enable 2FA and return success message', async () => {
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        twoFASecret: 'secret',
+      });
+      jest.spyOn(service, 'isTfaCodeValid').mockResolvedValue(true);
+
+      const result = await service.enable2FA(1, '123456');
+
+      expect(mockUsersService.update).toHaveBeenCalledWith(1, {
+        isTwoFAEnabled: true,
+      });
+      expect(result).toEqual({ message: '2FA turned on successfully' });
+    });
+  });
+
+  describe('disable2FA', () => {
+    it('should throw NotFoundException if user does not exist', async () => {
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.disable2FA(1, '123456')).rejects.toThrow(
+        new NotFoundException(USER_NOT_FOUND),
+      );
+    });
+
+    it('should throw UnauthorizedException if user has no 2FA secret', async () => {
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue(mockUser);
+
+      await expect(service.disable2FA(1, '123456')).rejects.toThrow(
+        new UnauthorizedException(INVALID_2FA_CODE),
+      );
+    });
+
+    it('should throw UnauthorizedException if code is invalid', async () => {
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        twoFASecret: 'secret',
+      });
+      jest.spyOn(service, 'isTfaCodeValid').mockResolvedValue(false);
+
+      await expect(service.disable2FA(1, '000000')).rejects.toThrow(
+        new UnauthorizedException(INVALID_2FA_CODE),
+      );
+    });
+
+    it('should disable 2FA and return success message', async () => {
+      (mockUsersService.findOneById as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        twoFASecret: 'secret',
+      });
+      jest.spyOn(service, 'isTfaCodeValid').mockResolvedValue(true);
+
+      const result = await service.disable2FA(1, '123456');
+
+      expect(mockUsersService.update).toHaveBeenCalledWith(1, {
+        isTwoFAEnabled: false,
+        twoFASecret: null,
+      });
+      expect(result).toEqual({ message: '2FA turned off successfully' });
     });
   });
 

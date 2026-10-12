@@ -8,7 +8,6 @@ import {
   Inject,
   Post,
   Res,
-  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
@@ -29,12 +28,13 @@ import {
   ApiOperation,
   ApiUnauthorizedResponse,
   ApiTooManyRequestsResponse,
+  ApiNotFoundResponse,
+  ApiBadRequestResponse,
 } from '@nestjs/swagger';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { Response } from 'express';
 import { ConfigType } from '@nestjs/config';
 import appConfig from '../config/app.config';
-import { INVALID_2FA_CODE } from './auth.constants';
 import { Skip2FA } from './decorators/skip-2fa.decorator';
 import { Throttle } from '@nestjs/throttler';
 
@@ -166,14 +166,25 @@ export class AuthController {
   })
   @ApiOkResponse({
     schema: {
-      example: {
-        qrCodeDataUrl: 'data:image/png;base64,...',
-        secret: 'JBSWY3DPEHPK3PXP',
+      type: 'object',
+      properties: {
+        qrCodeDataUrl: {
+          type: 'string',
+          example: 'data:image/png;base64,...',
+        },
+        secret: {
+          type: 'string',
+          example: 'JBSWY3DPEHPK3PXP',
+        },
       },
     },
   })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  @ApiBadRequestResponse({
+    description: '2FA is already enabled for this user',
+  })
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   public async setup2FA(@CurrentUser('sub') userId: number) {
     const { secret, uri } = await this.authService.generateTfaSecret(userId);
@@ -204,17 +215,7 @@ export class AuthController {
     @CurrentUser('sub') userId: number,
     @Body() { tfaCode }: TfaCodeDto,
   ) {
-    const isCodeValid = await this.authService.isTfaCodeValid(userId, tfaCode);
-
-    if (!isCodeValid) {
-      throw new UnauthorizedException(INVALID_2FA_CODE);
-    }
-
-    await this.usersService.update(userId, {
-      isTwoFAEnabled: true,
-    });
-
-    return { message: '2FA turned on successfully' };
+    return this.authService.enable2FA(userId, tfaCode);
   }
 
   @Delete('2fa')
@@ -235,18 +236,7 @@ export class AuthController {
     @CurrentUser('sub') userId: number,
     @Body() { tfaCode }: TfaCodeDto,
   ) {
-    const isCodeValid = await this.authService.isTfaCodeValid(userId, tfaCode);
-
-    if (!isCodeValid) {
-      throw new UnauthorizedException(INVALID_2FA_CODE);
-    }
-
-    await this.usersService.update(userId, {
-      isTwoFAEnabled: false,
-      twoFASecret: null,
-    });
-
-    return { message: '2FA turned off successfully' };
+    return this.authService.disable2FA(userId, tfaCode);
   }
 
   @Post('2fa/verify')

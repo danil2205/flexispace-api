@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
@@ -82,7 +83,7 @@ export class AuthService {
     const user = await this.usersService.findOneById(userId);
 
     if (!user) {
-      throw new UnauthorizedException(USER_NOT_FOUND);
+      throw new NotFoundException(USER_NOT_FOUND);
     }
 
     if (user.twoFASecret) {
@@ -107,26 +108,52 @@ export class AuthService {
     return toDataURL(uri);
   }
 
-  public async isTfaCodeValid(userId: number, code: string) {
-    const user = await this.usersService.findOneById(userId);
-    const secret = user!.twoFASecret;
-
-    if (!secret) return false;
-
+  public async isTfaCodeValid(secret: string, code: string): Promise<boolean> {
     const isValid = await verify({ token: code, secret });
 
     return isValid.valid;
   }
 
-  public async tfaAuthenticate(userId: number, code: string) {
+  private async verifyUserTfaCode(userId: number, code: string): Promise<User> {
     const user = await this.usersService.findOneById(userId);
-    const isCodeValid = await this.isTfaCodeValid(userId, code);
+
+    if (!user) {
+      throw new NotFoundException(USER_NOT_FOUND);
+    }
+
+    if (!user.twoFASecret) {
+      throw new UnauthorizedException(INVALID_2FA_CODE);
+    }
+
+    const isCodeValid = await this.isTfaCodeValid(user.twoFASecret, code);
 
     if (!isCodeValid) {
       throw new UnauthorizedException(INVALID_2FA_CODE);
     }
 
-    return this.generateTokens(user!, true);
+    return user;
+  }
+
+  public async tfaAuthenticate(userId: number, code: string) {
+    const user = await this.verifyUserTfaCode(userId, code);
+    return this.generateTokens(user, true);
+  }
+
+  public async enable2FA(userId: number, code: string) {
+    await this.verifyUserTfaCode(userId, code);
+    await this.usersService.update(userId, { isTwoFAEnabled: true });
+
+    return { message: '2FA turned on successfully' };
+  }
+
+  public async disable2FA(userId: number, code: string) {
+    await this.verifyUserTfaCode(userId, code);
+    await this.usersService.update(userId, {
+      isTwoFAEnabled: false,
+      twoFASecret: null,
+    });
+
+    return { message: '2FA turned off successfully' };
   }
 
   public async signToken<T>(userId: number, payload?: T) {

@@ -1,4 +1,14 @@
-import { Controller, Delete, Get, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -8,6 +18,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiUnauthorizedResponse,
@@ -23,8 +35,15 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiOkResponse({ description: 'Current user profile' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  @ApiNotFoundResponse({ description: 'User not found' })
   public async getProfile(@CurrentUser('sub') userId: number) {
-    return this.usersService.findOneById(userId);
+    const user = await this.usersService.findOneById(userId);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
   }
 
   @Get()
@@ -40,14 +59,15 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth('bearer')
   @ApiOperation({ summary: 'Delete user (admin only)' })
-  @ApiOkResponse({ description: 'User deleted successfully' })
+  @ApiNoContentResponse({ description: 'User deleted successfully' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   @ApiForbiddenResponse({ description: 'Forbidden: admin role required' })
-  public deleteUser(@Param('id') id: string) {
-    return this.usersService.delete(Number(id));
+  public deleteUser(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.delete(id);
   }
 }

@@ -150,7 +150,7 @@ describe('UsersController (e2e)', () => {
       await request(app.getHttpServer() as Server)
         .delete(`/users/${userId}`)
         .auth(adminToken, { type: 'bearer' })
-        .expect(HttpStatus.OK);
+        .expect(HttpStatus.NO_CONTENT);
 
       const response = await request(app.getHttpServer() as Server)
         .get('/users')
